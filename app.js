@@ -13,8 +13,39 @@ let currentFilter = 'all';
 let searchQuery = '';
 let countdownInterval = null;
 
-// --- State Akun Bersih (Tanpa Dummy) ---
-let accounts = [];
+// --- Algoritma Rekomendasi Urutan Label (Akun 1, Akun 2, dst) ---
+// Jika akun dihapus, nomor slot yang kosong otomatis direkomendasikan kembali
+function getNextAvailableAccountLabel() {
+  const usedNumbers = new Set();
+  const regex = /^Akun\s*(\d+)$/i;
+
+  accounts.forEach(acc => {
+    if (acc.name) {
+      const match = acc.name.trim().match(regex);
+      if (match) {
+        usedNumbers.add(parseInt(match[1], 10));
+      }
+    }
+  });
+
+  let slot = 1;
+  while (usedNumbers.has(slot)) {
+    slot++;
+  }
+  return `Akun ${slot}`;
+}
+
+function updateLabelSuggestion() {
+  const nextLabel = getNextAvailableAccountLabel();
+  const nameInput = document.getElementById('input-name');
+  if (nameInput) {
+    nameInput.placeholder = `contoh: ${nextLabel}`;
+    // Jika input kosong atau berisi format Akun N otomatis sebelumnya, perbarui ke slot berikutnya
+    if (!nameInput.value.trim() || /^Akun\s*\d+$/i.test(nameInput.value.trim())) {
+      nameInput.value = nextLabel;
+    }
+  }
+}
 
 // --- Audio Synthesizer (Web Audio API) ---
 function playResetChime() {
@@ -102,7 +133,7 @@ function loadData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       accounts = JSON.parse(raw);
-      // Bersihkan data dummy lama jika ada
+      // Bersihkan data dummy sampel lama jika tersimpan
       accounts = accounts.filter(a => 
         !['acc-1', 'acc-2', 'acc-3'].includes(a.id) &&
         !['dev.utama@gmail.com', 'work.antigravity@company.com', 'cadangan.project@gmail.com'].includes(a.email)
@@ -120,6 +151,7 @@ function loadData() {
   const rawSound = localStorage.getItem(SOUND_KEY);
   soundEnabled = rawSound !== null ? JSON.parse(rawSound) : true;
   updateSoundButtonUI();
+  updateLabelSuggestion();
 }
 
 function saveData() {
@@ -205,7 +237,7 @@ function setSprintLimit(accountId) {
 
   saveData();
   renderAll();
-  showToast(`🟡 Limit 5 jam diterapkan untuk "${acc.email}". Reset tepat pada ${formatDateTime(reset.toISOString())}`, 'warning');
+  showToast(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}". Reset pada ${formatDateTime(reset.toISOString())}`, 'warning');
 }
 
 // 2. Kena Limit Mingguan (Weekly 7 Days Hard Cap)
@@ -224,42 +256,25 @@ function setWeeklyLimit(accountId) {
 
   saveData();
   renderAll();
-  showToast(`🔴 Limit mingguan 7 hari diterapkan untuk "${acc.email}". Reset tepat pada ${formatDateTime(reset.toISOString())}`, 'warning');
+  showToast(`🔴 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}". Reset pada ${formatDateTime(reset.toISOString())}`, 'warning');
 }
 
-// 3. Set Akun Siap Pakai Lagi (Restore / Ready)
-function setAccountReady(accountId, silent = false) {
-  const acc = accounts.find(a => a.id === accountId);
-  if (!acc) return;
-
-  acc.status = 'ready';
-  acc.lockedAt = null;
-  acc.resetAt = null;
-  acc.durationMs = 0;
-  acc.notified = false;
-
-  saveData();
-  renderAll();
-  if (!silent) {
-    showToast(`🟢 Akun "${acc.email}" kini SIAP DIGUNAKAN!`, 'success');
-    playResetChime();
-  }
-}
-
-// 4. Hapus Akun
+// 3. Hapus Akun (Nomor urut otomatis kosong dan siap dipakai ulang!)
 function deleteAccount(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
-  if (confirm(`Yakin ingin menghapus akun "${acc.email}"?`)) {
+  const displayName = acc.name ? `${acc.name} (${acc.email})` : acc.email;
+  if (confirm(`Yakin ingin menghapus akun "${displayName}"?`)) {
     accounts = accounts.filter(a => a.id !== accountId);
     saveData();
     renderAll();
-    showToast(`Akun "${acc.email}" berhasil dihapus.`, 'info');
+    updateLabelSuggestion();
+    showToast(`Akun "${displayName}" berhasil dihapus. Nomor urut siap dipakai kembali!`, 'info');
   }
 }
 
-// 5. Salin Email Cepat
+// 4. Salin Email Cepat
 function copyEmail(email) {
   navigator.clipboard.writeText(email).then(() => {
     showToast(`Email ${email} berhasil disalin ke clipboard!`, 'success');
@@ -282,7 +297,7 @@ function renderRecommendation() {
         <span class="rec-badge">👋</span>
         <div>
           <div class="rec-title">Selamat Datang di Antigravity Token Tracker!</div>
-          <div class="rec-desc">Tambahkan email akun Anda di form bawah untuk mulai memantau waktu reset token secara otomatis.</div>
+          <div class="rec-desc">Ketik email Anda pada form di bawah lalu klik <strong>Simpan Akun</strong> untuk mulai memantau token.</div>
         </div>
       </div>
     `;
@@ -293,13 +308,14 @@ function renderRecommendation() {
 
   if (readyAccounts.length > 0) {
     const topAcc = readyAccounts[0];
+    const accLabel = topAcc.name ? `${escapeHtml(topAcc.name)}: ` : '';
     banner.className = 'recommendation-banner';
     banner.innerHTML = `
       <div class="rec-content">
         <span class="rec-badge">🟢</span>
         <div>
-          <div class="rec-title">Rekomendasi Akun Siap Pakai Sekarang: <strong>${escapeHtml(topAcc.email)}</strong></div>
-          <div class="rec-desc">Status: <strong>Bisa Digunakan</strong> ${topAcc.name ? '&bull; Label: ' + escapeHtml(topAcc.name) : ''} &bull; Token tersedia!</div>
+          <div class="rec-title">Rekomendasi Akun Siap Pakai Sekarang: <strong>${accLabel}${escapeHtml(topAcc.email)}</strong></div>
+          <div class="rec-desc">Status: <strong>Bisa Digunakan</strong> &bull; Token kuota aktif dan siap dipakai!</div>
         </div>
       </div>
       <div class="rec-action">
@@ -330,12 +346,13 @@ function renderRecommendation() {
     banner.className = 'recommendation-banner all-locked';
     if (nextAcc) {
       const rem = getRemainingTime(nextAcc.resetAt);
+      const accDisplay = nextAcc.name ? `${nextAcc.name} (${nextAcc.email})` : nextAcc.email;
       banner.innerHTML = `
         <div class="rec-content">
           <span class="rec-badge">⏳</span>
           <div>
             <div class="rec-title">Semua Akun Sedang Kena Limit!</div>
-            <div class="rec-desc">Akun tercepat yang akan pulih: <strong>${escapeHtml(nextAcc.email)}</strong> dalam <strong>${formatCountdownTextSimple(rem)}</strong> (${formatDateTime(nextAcc.resetAt)})</div>
+            <div class="rec-desc">Akun tercepat yang akan pulih: <strong>${escapeHtml(accDisplay)}</strong> dalam <strong>${formatCountdownTextSimple(rem)}</strong> (${formatDateTime(nextAcc.resetAt)})</div>
           </div>
         </div>
       `;
@@ -388,11 +405,11 @@ function renderCards() {
 
   if (accounts.length === 0) {
     grid.innerHTML = '';
-    emptyState.classList.remove('hidden');
+    if (emptyState) emptyState.classList.remove('hidden');
     return;
   }
 
-  emptyState.classList.add('hidden');
+  if (emptyState) emptyState.classList.add('hidden');
 
   if (filtered.length === 0) {
     grid.innerHTML = `
@@ -486,7 +503,7 @@ function renderCards() {
               <span>Token Aktif & Siap Digunakan</span>
             </div>
             <div class="ready-box-desc">
-              Akun ini tidak sedang dalam cooldown. Klik salah satu tombol di bawah jika kuota baru saja habis.
+              Akun ini siap dipakai. Klik salah satu tombol di bawah jika kuota baru saja habis.
             </div>
           </div>
         `}
@@ -504,8 +521,8 @@ function renderCards() {
         </div>
 
         <div class="card-bottom">
-          <span>ID: ${acc.id.slice(0, 10)}</span>
-          <button class="btn-delete-card" onclick="deleteAccount('${acc.id}')" title="Hapus akun ini">
+          <span style="font-weight: 600; color: #a5b4fc;">${escapeHtml(acc.name || 'Akun')}</span>
+          <button class="btn-delete-card" onclick="deleteAccount('${acc.id}')" title="Hapus akun ini agar nomor urut bisa dipakai ulang">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -547,9 +564,9 @@ function startLiveTicker() {
             acc.notified = true;
             sendDesktopNotification(
               '🎉 Token Antigravity Pulih!',
-              `Akun "${acc.email}" sudah selesai reset dan siap digunakan kembali!`
+              `Akun "${acc.name || acc.email}" sudah selesai reset dan siap digunakan kembali!`
             );
-            showToast(`🎉 "${acc.email}" sudah reset dan siap digunakan!`, 'success');
+            showToast(`🎉 "${acc.name || acc.email}" sudah reset dan siap digunakan!`, 'success');
             playResetChime();
           }
         } else if (rem) {
@@ -580,24 +597,29 @@ function setupQuickAddForm() {
     const nameInput = document.getElementById('input-name');
 
     const email = emailInput.value.trim();
-    const name = nameInput.value.trim();
+    let name = nameInput.value.trim();
 
     if (!email) {
       showToast('Email akun harus diisi!', 'warning');
       return;
     }
 
+    // Jika label kosong, gunakan rekomendasi urutan slot otomatis (Akun 1, Akun 2, dll)
+    if (!name) {
+      name = getNextAvailableAccountLabel();
+    }
+
     // Cek apakah email sudah ada
     const exists = accounts.some(a => a.email.toLowerCase() === email.toLowerCase());
     if (exists) {
-      showToast(`Akun dengan email ${email} sudah terdaftar!`, 'warning');
+      showToast(`Akun dengan email "${email}" sudah terdaftar!`, 'warning');
       return;
     }
 
     const newAcc = {
       id: 'acc-' + Date.now(),
       email,
-      name: name || '',
+      name,
       status: 'ready',
       lockedAt: null,
       resetAt: null,
@@ -605,15 +627,28 @@ function setupQuickAddForm() {
       notified: false
     };
 
-    accounts.unshift(newAcc); // Letakkan di paling atas
+    // Urutkan akun berdasarkan nomor urut (Akun 1, Akun 2, Akun 3...)
+    accounts.push(newAcc);
+    accounts.sort((a, b) => {
+      const matchA = (a.name || '').match(/^Akun\s*(\d+)$/i);
+      const matchB = (b.name || '').match(/^Akun\s*(\d+)$/i);
+      if (matchA && matchB) {
+        return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
+      }
+      if (matchA) return -1;
+      if (matchB) return 1;
+      return (a.name || a.email).localeCompare(b.name || b.email);
+    });
+
     saveData();
     renderAll();
 
+    // Reset input dan perbarui rekomendasi label ke slot berikutnya
     emailInput.value = '';
-    nameInput.value = '';
+    updateLabelSuggestion();
     emailInput.focus();
 
-    showToast(`✅ Akun "${email}" berhasil ditambahkan dan siap digunakan!`, 'success');
+    showToast(`✅ Akun "${name}" (${email}) berhasil ditambahkan dan siap digunakan!`, 'success');
   });
 }
 
@@ -683,6 +718,7 @@ function setupBackupModal() {
             accounts = imported;
             saveData();
             renderAll();
+            updateLabelSuggestion();
             modal?.classList.add('hidden');
             showToast(`Berhasil memulihkan ${imported.length} akun!`, 'success');
           }
@@ -749,9 +785,15 @@ function escapeHtml(str) {
 }
 
 // --- Inisialisasi ---
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   loadData();
   setupEventListeners();
   renderAll();
   startLiveTicker();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

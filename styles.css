@@ -166,6 +166,10 @@ body {
 }
 
 /* Recommendation Banner */
+.recommendation-banner:empty {
+  display: none;
+}
+
 .recommendation-banner {
   margin-bottom: 24px;
   padding: 16px 20px;
