@@ -388,6 +388,184 @@ function copyEmail(email) {
   });
 }
 
+// 5. Atur Jam & Hari Manual (Sesuai sisa waktu di Antigravity)
+function applyManualAdjustment(accountId) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const daysInput = document.getElementById(`input-days-${accountId}`);
+  const hoursInput = document.getElementById(`input-hours-${accountId}`);
+  const minsInput = document.getElementById(`input-mins-${accountId}`);
+
+  const days = Math.max(0, parseInt(daysInput ? daysInput.value : 0, 10) || 0);
+  const hours = Math.max(0, parseInt(hoursInput ? hoursInput.value : 0, 10) || 0);
+  const mins = Math.max(0, parseInt(minsInput ? minsInput.value : 0, 10) || 0);
+
+  const totalMs = ((days * 24 + hours) * 60 + mins) * 60 * 1000;
+
+  if (totalMs <= 0) {
+    acc.status = 'ready';
+    acc.lockedAt = null;
+    acc.resetAt = null;
+    acc.durationMs = 0;
+    acc.notified = false;
+    saveData();
+    renderAll();
+    showToast(`🟢 Akun "${acc.name || acc.email}" diatur ke Siap Pakai!`, 'success');
+    return;
+  }
+
+  const now = new Date();
+  const reset = new Date(now.getTime() + totalMs);
+
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = totalMs;
+  acc.notified = false;
+
+  // Jika durasi lebih dari 6 jam atau ada setting hari, jadikan limit mingguan
+  if (days >= 1 || totalMs > 6 * 3600 * 1000) {
+    acc.status = 'weekly_locked';
+  } else {
+    acc.status = 'sprint_cooldown';
+  }
+
+  saveData();
+  renderAll();
+  const timeStr = `${days > 0 ? days + ' Hari ' : ''}${hours} Jam ${mins} Menit`;
+  showToast(`⚙️ Waktu "${acc.name || acc.email}" disesuaikan ke ${timeStr}. Reset: ${formatDateTime(reset.toISOString())}`, 'success');
+}
+
+// Pintasan langsung set jam tertentu (misal: 5 Jam)
+function quickSetHours(accountId, targetHours) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const now = new Date();
+  const totalMs = targetHours * 3600 * 1000;
+  const reset = new Date(now.getTime() + totalMs);
+
+  acc.status = targetHours > 6 ? 'weekly_locked' : 'sprint_cooldown';
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = totalMs;
+  acc.notified = false;
+
+  saveData();
+  renderAll();
+  showToast(`⚡ Hitung mundur disetel ke ${targetHours} Jam untuk "${acc.name || acc.email}"`, 'warning');
+}
+
+// Pintasan langsung set hari tertentu (misal: 7 Hari)
+function quickSetDays(accountId, targetDays) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const now = new Date();
+  const totalMs = targetDays * 24 * 3600 * 1000;
+  const reset = new Date(now.getTime() + totalMs);
+
+  acc.status = 'weekly_locked';
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = totalMs;
+  acc.notified = false;
+
+  saveData();
+  renderAll();
+  showToast(`🛑 Hitung mundur disetel ke ${targetDays} Hari untuk "${acc.name || acc.email}"`, 'warning');
+}
+
+// Tambah / Kurang Jam Cepat (+1 Jam, -1 Jam)
+function quickAdjustHours(accountId, deltaHours) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  let currentMs = 0;
+  if (acc.resetAt) {
+    const diff = new Date(acc.resetAt).getTime() - Date.now();
+    if (diff > 0) currentMs = diff;
+  }
+
+  const deltaMs = deltaHours * 3600 * 1000;
+  const newMs = Math.max(0, currentMs + deltaMs);
+
+  if (newMs <= 0) {
+    acc.status = 'ready';
+    acc.lockedAt = null;
+    acc.resetAt = null;
+    acc.durationMs = 0;
+    acc.notified = false;
+    saveData();
+    renderAll();
+    showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
+    return;
+  }
+
+  const now = new Date();
+  const reset = new Date(now.getTime() + newMs);
+
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = newMs;
+  acc.notified = false;
+
+  if (newMs > 6 * 3600 * 1000) {
+    acc.status = 'weekly_locked';
+  } else {
+    acc.status = 'sprint_cooldown';
+  }
+
+  saveData();
+  renderAll();
+  showToast(`⏱️ Waktu disesuaikan ${deltaHours > 0 ? '+' : ''}${deltaHours} Jam untuk "${acc.name || acc.email}"`, 'info');
+}
+
+// Tambah / Kurang Hari Cepat (+1 Hari, -1 Hari)
+function quickAdjustDays(accountId, deltaDays) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  let currentMs = 0;
+  if (acc.resetAt) {
+    const diff = new Date(acc.resetAt).getTime() - Date.now();
+    if (diff > 0) currentMs = diff;
+  }
+
+  const deltaMs = deltaDays * 24 * 3600 * 1000;
+  const newMs = Math.max(0, currentMs + deltaMs);
+
+  if (newMs <= 0) {
+    acc.status = 'ready';
+    acc.lockedAt = null;
+    acc.resetAt = null;
+    acc.durationMs = 0;
+    acc.notified = false;
+    saveData();
+    renderAll();
+    showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
+    return;
+  }
+
+  const now = new Date();
+  const reset = new Date(now.getTime() + newMs);
+
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = newMs;
+  acc.notified = false;
+
+  if (newMs > 6 * 3600 * 1000) {
+    acc.status = 'weekly_locked';
+  } else {
+    acc.status = 'sprint_cooldown';
+  }
+
+  saveData();
+  renderAll();
+  showToast(`⏱️ Waktu disesuaikan ${deltaDays > 0 ? '+' : ''}${deltaDays} Hari untuk "${acc.name || acc.email}"`, 'info');
+}
+
 // --- Render UI ---
 
 // Banner Rekomendasi Teratas
@@ -557,27 +735,75 @@ function renderCards() {
       progressPercent = Math.min(100, Math.max(0, Math.round((elapsed / acc.durationMs) * 100)));
     }
 
+    // Hitung nilai awal untuk input pengaturan manual
+    const initialDays = (!isReady && rem && !rem.expired) ? rem.days : 0;
+    const initialHours = (!isReady && rem && !rem.expired) ? rem.hours : (isSprint ? 5 : 0);
+    const initialMinutes = (!isReady && rem && !rem.expired) ? rem.minutes : 0;
+
     return `
       <div class="account-card ${cardClass}" id="card-${acc.id}">
-        <!-- Card Top -->
+        <!-- Card Top: Label & Email Jelas -->
         <div class="card-top">
           <div class="card-account-info">
-            <div class="card-email-row">
-              <span class="card-email" title="${escapeHtml(acc.email)}">${escapeHtml(acc.email)}</span>
+            <div class="card-label-badge-row">
+              <span class="card-account-badge">${escapeHtml(acc.name || 'Akun')}</span>
               <button class="btn-copy-email" onclick="copyEmail('${escapeHtml(acc.email)}')" title="Salin Email">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
-                Salin
+                Salin Email
               </button>
             </div>
-            ${acc.name ? `<span class="card-name">${escapeHtml(acc.name)}</span>` : ''}
+            <div class="card-email-row" style="margin-top: 4px;">
+              <span class="card-email" title="${escapeHtml(acc.email)}">${escapeHtml(acc.email)}</span>
+            </div>
           </div>
 
           <div class="status-badge ${statusClass}">
             <span class="dot"></span>
             <span>${statusLabel}</span>
+          </div>
+        </div>
+
+        <!-- Bagian Atur Jam & Hari Manual (Tepat setelah nama label akun) -->
+        <div class="manual-adjust-bar">
+          <div class="adjust-top-row">
+            <span class="adjust-label">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              Atur Limit Sesuai Antigravity:
+            </span>
+            <div class="adjust-inputs">
+              <div class="input-unit">
+                <input type="number" id="input-days-${acc.id}" min="0" max="30" value="${initialDays}" placeholder="0" title="Jumlah Hari">
+                <span>Hari</span>
+              </div>
+              <div class="input-unit">
+                <input type="number" id="input-hours-${acc.id}" min="0" max="23" value="${initialHours}" placeholder="0" title="Jumlah Jam">
+                <span>Jam</span>
+              </div>
+              <div class="input-unit">
+                <input type="number" id="input-mins-${acc.id}" min="0" max="59" value="${initialMinutes}" placeholder="0" title="Jumlah Menit">
+                <span>Mnt</span>
+              </div>
+              <button class="btn-apply-adj" onclick="applyManualAdjustment('${acc.id}')" title="Terapkan waktu manual ini ke hitung mundur">
+                ✓ Terapkan
+              </button>
+            </div>
+          </div>
+          <div class="adjust-quick-row">
+            <span class="adjust-quick-label">Pintasan Cepat:</span>
+            <div class="adjust-quick-btns">
+              <button class="btn-quick-adj" onclick="quickSetHours('${acc.id}', 5)" title="Langsung set ke 5 Jam">⚡ 5 Jam</button>
+              <button class="btn-quick-adj" onclick="quickSetDays('${acc.id}', 7)" title="Langsung set ke 7 Hari">🛑 7 Hari</button>
+              <button class="btn-quick-adj" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
+              <button class="btn-quick-adj" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
+              <button class="btn-quick-adj" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
+              <button class="btn-quick-adj" onclick="quickAdjustDays('${acc.id}', -1)" title="Kurangi 1 Hari">-1 Hari</button>
+            </div>
           </div>
         </div>
 
@@ -681,6 +907,15 @@ function startLiveTicker() {
           const timeElem = document.getElementById(`time-${acc.id}`);
           if (timeElem) {
             timeElem.innerHTML = formatCountdownDisplay(rem);
+          }
+          const cardElem = document.getElementById(`card-${acc.id}`);
+          if (cardElem && acc.durationMs > 0) {
+            const elapsed = acc.durationMs - rem.diff;
+            const pct = Math.min(100, Math.max(0, Math.round((elapsed / acc.durationMs) * 100)));
+            const bar = cardElem.querySelector('.progress-bar-fill');
+            if (bar) bar.style.width = pct + '%';
+            const headerPct = cardElem.querySelector('.countdown-header span:last-child');
+            if (headerPct) headerPct.textContent = `${pct}% Menuju Pulih`;
           }
         }
       }
@@ -830,6 +1065,11 @@ window.setSprintLimit = setSprintLimit;
 window.setWeeklyLimit = setWeeklyLimit;
 window.deleteAccount = deleteAccount;
 window.copyEmail = copyEmail;
+window.applyManualAdjustment = applyManualAdjustment;
+window.quickSetHours = quickSetHours;
+window.quickSetDays = quickSetDays;
+window.quickAdjustHours = quickAdjustHours;
+window.quickAdjustDays = quickAdjustDays;
 
 // --- Inisialisasi ---
 function initApp() {
