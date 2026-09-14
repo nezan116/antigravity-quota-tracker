@@ -524,10 +524,9 @@ body {
   align-items: center;
 }
 
-/* Bagian Atur Jam & Hari Manual (Tepat setelah nama label) */
-.manual-adjust-bar {
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* Bagian Atur Akhir Limit Saat Di-klik (Langsung sesuaikan akhir 5 jam / 7 hari tanpa ketik) */
+.click-adjust-section {
+  background: rgba(0, 0, 0, 0.28);
   border-radius: 10px;
   padding: 10px 12px;
   display: flex;
@@ -536,111 +535,127 @@ body {
   margin-top: 6px;
 }
 
-.adjust-top-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+.click-adjust-section.sprint {
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.05);
 }
 
-.adjust-label {
+.click-adjust-section.weekly {
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.click-adjust-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   font-weight: 700;
   color: #94a3b8;
-  display: flex;
-  align-items: center;
-  gap: 5px;
 }
 
-.adjust-inputs {
+.click-chips-grid {
   display: flex;
-  align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
+  gap: 6px;
 }
 
-.input-unit {
-  display: flex;
-  align-items: center;
-  gap: 3px;
+.chip-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-muted);
-}
-
-.input-unit input {
-  width: 48px;
-  padding: 4px 6px;
-  text-align: center;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.input-unit input:focus {
-  border-color: var(--accent-cyan);
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.btn-apply-adj {
-  background: rgba(6, 182, 212, 0.22);
-  border: 1px solid rgba(6, 182, 212, 0.5);
-  color: #67e8f9;
-  font-size: 11px;
-  font-weight: 700;
   padding: 5px 10px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn-apply-adj:hover {
-  background: rgba(6, 182, 212, 0.4);
-  color: #fff;
-}
-
-.adjust-quick-row {
-  display: flex;
+  transition: all 0.15s ease;
+  user-select: none;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.adjust-quick-label {
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.adjust-quick-btns {
-  display: flex;
   gap: 4px;
-  flex-wrap: wrap;
 }
 
-.btn-quick-adj {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-color);
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.chip-btn:active {
+  transform: translateY(1px);
+}
+
+.chip-btn.highlight {
+  font-weight: 700;
+}
+
+.click-adjust-section.sprint .chip-btn.highlight {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
+}
+
+.click-adjust-section.sprint .chip-btn.highlight:hover {
+  background: rgba(245, 158, 11, 0.35);
+  color: #fff;
+}
+
+.click-adjust-section.weekly .chip-btn.highlight {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+
+.click-adjust-section.weekly .chip-btn.highlight:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #fff;
+}
+
+.chip-btn.step {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+}
+
+.chip-btn.step:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: #fff;
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.card-ready-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ready-tip {
+  font-size: 11px;
   color: var(--text-muted);
+}
+
+.card-switch-limit {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-switch-limit {
+  background: none;
+  border: none;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 6px;
+  color: #94a3b8;
   cursor: pointer;
-  transition: all 0.15s;
+  padding: 4px 6px;
+  transition: color 0.15s;
 }
 
-.btn-quick-adj:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.3);
+.btn-switch-limit:hover {
+  color: #e2e8f0;
+  text-decoration: underline;
 }
 
 /* Status Badge */

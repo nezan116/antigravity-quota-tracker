@@ -566,6 +566,51 @@ function quickAdjustDays(accountId, deltaDays) {
   showToast(`⏱️ Waktu disesuaikan ${deltaDays > 0 ? '+' : ''}${deltaDays} Hari untuk "${acc.name || acc.email}"`, 'info');
 }
 
+// Tambah / Kurang Menit Cepat (+15 Mnt, -15 Mnt)
+function quickAdjustMins(accountId, deltaMins) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  let currentMs = 0;
+  if (acc.resetAt) {
+    const diff = new Date(acc.resetAt).getTime() - Date.now();
+    if (diff > 0) currentMs = diff;
+  }
+
+  const deltaMs = deltaMins * 60 * 1000;
+  const newMs = Math.max(0, currentMs + deltaMs);
+
+  if (newMs <= 0) {
+    acc.status = 'ready';
+    acc.lockedAt = null;
+    acc.resetAt = null;
+    acc.durationMs = 0;
+    acc.notified = false;
+    saveData();
+    renderAll();
+    showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
+    return;
+  }
+
+  const now = new Date();
+  const reset = new Date(now.getTime() + newMs);
+
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = newMs;
+  acc.notified = false;
+
+  if (newMs > 6 * 3600 * 1000) {
+    acc.status = 'weekly_locked';
+  } else {
+    acc.status = 'sprint_cooldown';
+  }
+
+  saveData();
+  renderAll();
+  showToast(`⏱️ Waktu disesuaikan ${deltaMins > 0 ? '+' : ''}${deltaMins} Menit untuk "${acc.name || acc.email}"`, 'info');
+}
+
 // --- Render UI ---
 
 // Banner Rekomendasi Teratas
@@ -735,11 +780,6 @@ function renderCards() {
       progressPercent = Math.min(100, Math.max(0, Math.round((elapsed / acc.durationMs) * 100)));
     }
 
-    // Hitung nilai awal untuk input pengaturan manual
-    const initialDays = (!isReady && rem && !rem.expired) ? rem.days : 0;
-    const initialHours = (!isReady && rem && !rem.expired) ? rem.hours : (isSprint ? 5 : 0);
-    const initialMinutes = (!isReady && rem && !rem.expired) ? rem.minutes : 0;
-
     return `
       <div class="account-card ${cardClass}" id="card-${acc.id}">
         <!-- Card Top: Label & Email Jelas -->
@@ -766,49 +806,33 @@ function renderCards() {
           </div>
         </div>
 
-        <!-- Bagian Atur Jam & Hari Manual (Tepat setelah nama label akun) -->
-        <div class="manual-adjust-bar">
-          <div class="adjust-top-row">
-            <span class="adjust-label">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-              Atur Limit Sesuai Antigravity:
-            </span>
-            <div class="adjust-inputs">
-              <div class="input-unit">
-                <input type="number" id="input-days-${acc.id}" min="0" max="30" value="${initialDays}" placeholder="0" title="Jumlah Hari">
-                <span>Hari</span>
+        <!-- TEPAT SETELAH NAMA LABEL AKUN: KONTROL WAKTU / LIMIT -->
+        ${isReady ? `
+          <!-- Kondisi Siap Pakai: Tombol Klik Langsung ke 5 Jam atau 7 Hari -->
+          <div class="card-ready-actions">
+            <div class="ready-box">
+              <div class="ready-box-title">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>Token Aktif & Siap Digunakan</span>
               </div>
-              <div class="input-unit">
-                <input type="number" id="input-hours-${acc.id}" min="0" max="23" value="${initialHours}" placeholder="0" title="Jumlah Jam">
-                <span>Jam</span>
+              <div class="ready-box-desc">
+                Akun ini siap dipakai di Antigravity. Saat kuota baru saja habis, klik salah satu tombol di bawah untuk langsung menghitung mundur:
               </div>
-              <div class="input-unit">
-                <input type="number" id="input-mins-${acc.id}" min="0" max="59" value="${initialMinutes}" placeholder="0" title="Jumlah Menit">
-                <span>Mnt</span>
-              </div>
-              <button class="btn-apply-adj" onclick="applyManualAdjustment('${acc.id}')" title="Terapkan waktu manual ini ke hitung mundur">
-                ✓ Terapkan
+            </div>
+
+            <div class="btn-row-limits">
+              <button class="btn-limit-5h" onclick="setSprintLimit('${acc.id}')" title="Klik langsung: Mulai hitung mundur 5 jam">
+                ⚡ Habis Limit 5 Jam
+              </button>
+              <button class="btn-limit-weekly" onclick="setWeeklyLimit('${acc.id}')" title="Klik langsung: Mulai hitung mundur 7 hari">
+                🛑 Habis Limit Mingguan (7 Hari)
               </button>
             </div>
           </div>
-          <div class="adjust-quick-row">
-            <span class="adjust-quick-label">Pintasan Cepat:</span>
-            <div class="adjust-quick-btns">
-              <button class="btn-quick-adj" onclick="quickSetHours('${acc.id}', 5)" title="Langsung set ke 5 Jam">⚡ 5 Jam</button>
-              <button class="btn-quick-adj" onclick="quickSetDays('${acc.id}', 7)" title="Langsung set ke 7 Hari">🛑 7 Hari</button>
-              <button class="btn-quick-adj" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
-              <button class="btn-quick-adj" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
-              <button class="btn-quick-adj" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
-              <button class="btn-quick-adj" onclick="quickAdjustDays('${acc.id}', -1)" title="Kurangi 1 Hari">-1 Hari</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Middle: Countdown / Ready Info -->
-        ${!isReady ? `
+        ` : isSprint ? `
+          <!-- Kondisi Limit 5 Jam: Countdown + Klik Langsung Sesuaikan Akhir 5 Jam -->
           <div class="countdown-box">
             <div class="countdown-header">
               <span>Sisa Waktu Hitung Mundur:</span>
@@ -822,38 +846,84 @@ function renderCards() {
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="12 6 12 12 16 14"/>
               </svg>
-              <span>Token reset pada: <strong>${formatDateTime(acc.resetAt)}</strong></span>
+              <span>Akhir reset: <strong>${formatDateTime(acc.resetAt)}</strong></span>
             </div>
             <div class="cooldown-progress">
               <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
+
+            <!-- Penyesuaian Akhir 5 Jam saat Di-klik (Langsung sesuaikan agar pas dengan Antigravity) -->
+            <div class="click-adjust-section sprint">
+              <div class="click-adjust-header">
+                <span>⚡ Sesuaikan Akhir 5 Jam (Klik langsung sesuai):</span>
+              </div>
+              <div class="click-chips-grid">
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 1)" title="Set tepat 1 Jam lagi">1 Jam</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 2)" title="Set tepat 2 Jam lagi">2 Jam</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 3)" title="Set tepat 3 Jam lagi">3 Jam</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 4)" title="Set tepat 4 Jam lagi">4 Jam</button>
+                <button class="chip-btn highlight" onclick="quickSetHours('${acc.id}', 5)" title="Reset ke 5 Jam penuh">⚡ 5 Jam</button>
+                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
+                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
+                <button class="chip-btn step" onclick="quickAdjustMins('${acc.id}', -15)" title="Kurangi 15 Menit">-15 Mnt</button>
+                <button class="chip-btn step" onclick="quickAdjustMins('${acc.id}', 15)" title="Tambah 15 Menit">+15 Mnt</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-switch-limit">
+            <button class="btn-switch-limit" onclick="setWeeklyLimit('${acc.id}')" title="Ganti ke Limit Mingguan (7 Hari)">
+              🛑 Ganti ke Limit Mingguan (7 Hari) &rarr;
+            </button>
           </div>
         ` : `
-          <div class="ready-box">
-            <div class="ready-box-title">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"/>
+          <!-- Kondisi Limit Mingguan 7 Hari: Countdown + Klik Langsung Sesuaikan Akhir 7 Hari -->
+          <div class="countdown-box">
+            <div class="countdown-header">
+              <span>Sisa Waktu Hitung Mundur:</span>
+              <span>${progressPercent}% Menuju Pulih</span>
+            </div>
+            <div class="countdown-display" id="time-${acc.id}">
+              ${countdownHtml}
+            </div>
+            <div class="reset-date-info">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
               </svg>
-              <span>Token Aktif & Siap Digunakan</span>
+              <span>Akhir reset: <strong>${formatDateTime(acc.resetAt)}</strong></span>
             </div>
-            <div class="ready-box-desc">
-              Akun ini siap dipakai. Klik salah satu tombol di bawah jika kuota baru saja habis.
+            <div class="cooldown-progress">
+              <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
+
+            <!-- Penyesuaian Akhir 7 Hari saat Di-klik (Langsung sesuaikan agar pas dengan Antigravity) -->
+            <div class="click-adjust-section weekly">
+              <div class="click-adjust-header">
+                <span>🛑 Sesuaikan Akhir 7 Hari (Klik langsung sesuai):</span>
+              </div>
+              <div class="click-chips-grid">
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 1)" title="Set tepat 1 Hari lagi">1 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 2)" title="Set tepat 2 Hari lagi">2 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 3)" title="Set tepat 3 Hari lagi">3 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 4)" title="Set tepat 4 Hari lagi">4 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 5)" title="Set tepat 5 Hari lagi">5 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 6)" title="Set tepat 6 Hari lagi">6 Hari</button>
+                <button class="chip-btn highlight" onclick="quickSetDays('${acc.id}', 7)" title="Reset ke 7 Hari penuh">🛑 7 Hari</button>
+                <button class="chip-btn step" onclick="quickAdjustDays('${acc.id}', -1)" title="Kurangi 1 Hari">-1 Hari</button>
+                <button class="chip-btn step" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
+                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
+                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-switch-limit">
+            <button class="btn-switch-limit" onclick="setSprintLimit('${acc.id}')" title="Ganti ke Limit 5 Jam">
+              ⚡ Ganti ke Limit 5 Jam &rarr;
+            </button>
           </div>
         `}
 
-        <!-- Action Buttons (HANYA DUA TOMBOL HABIS LIMIT) -->
-        <div class="card-actions">
-          <div class="btn-row-limits">
-            <button class="btn-limit-5h" onclick="setSprintLimit('${acc.id}')" title="Mulai hitung mundur 5 jam">
-              ⚡ Habis Limit 5 Jam
-            </button>
-            <button class="btn-limit-weekly" onclick="setWeeklyLimit('${acc.id}')" title="Mulai hitung mundur 7 hari">
-              🛑 Habis Limit Mingguan
-            </button>
-          </div>
-        </div>
-
+        <!-- Card Bottom -->
         <div class="card-bottom">
           <span style="font-weight: 600; color: #a5b4fc;">${escapeHtml(acc.name || 'Akun')}</span>
           <button class="btn-delete-card" onclick="deleteAccount('${acc.id}')" title="Hapus akun ini agar nomor urut bisa dipakai ulang">
@@ -1070,6 +1140,7 @@ window.quickSetHours = quickSetHours;
 window.quickSetDays = quickSetDays;
 window.quickAdjustHours = quickAdjustHours;
 window.quickAdjustDays = quickAdjustDays;
+window.quickAdjustMins = quickAdjustMins;
 
 // --- Inisialisasi ---
 function initApp() {
