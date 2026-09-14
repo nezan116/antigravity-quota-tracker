@@ -1,7 +1,8 @@
 /**
  * Antigravity Quota & Token Reset Tracker
  * Mengelola pelacakan reset token mingguan (7 hari) dan 5 jam sprint limit
- * untuk banyak akun secara otomatis tanpa perlu pencatatan manual.
+ * untuk banyak akun secara otomatis.
+ * Mendukung penyimpanan lokal database.json (via server lokal) dan browser localStorage.
  */
 
 const STORAGE_KEY = 'antigravity_accounts_v2';
@@ -39,12 +40,24 @@ function updateLabelSuggestion() {
   const nextLabel = getNextAvailableAccountLabel();
   const nameInput = document.getElementById('input-name');
   if (nameInput) {
-    nameInput.placeholder = `contoh: ${nextLabel}`;
-    // Jika input kosong atau berisi format Akun N otomatis sebelumnya, perbarui ke slot berikutnya
+    nameInput.placeholder = nextLabel;
     if (!nameInput.value.trim() || /^Akun\s*\d+$/i.test(nameInput.value.trim())) {
       nameInput.value = nextLabel;
     }
   }
+}
+
+function sortAccounts() {
+  accounts.sort((a, b) => {
+    const matchA = (a.name || '').match(/^Akun\s*(\d+)$/i);
+    const matchB = (b.name || '').match(/^Akun\s*(\d+)$/i);
+    if (matchA && matchB) {
+      return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
+    }
+    if (matchA) return -1;
+    if (matchB) return 1;
+    return (a.name || a.email).localeCompare(b.name || b.email);
+  });
 }
 
 // --- Audio Synthesizer (Web Audio API) ---
@@ -127,25 +140,40 @@ function showToast(message, type = 'info') {
   }, 3500);
 }
 
-// --- Local Storage Management ---
-function loadData() {
+// --- Storage & Database Management ---
+// Mendukung dual-storage: Real database (database.json via server) + browser LocalStorage
+async function loadData() {
+  // 1. Muat dari LocalStorage untuk respon instan
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       accounts = JSON.parse(raw);
-      // Bersihkan data dummy sampel lama jika tersimpan
       accounts = accounts.filter(a => 
         !['acc-1', 'acc-2', 'acc-3'].includes(a.id) &&
         !['dev.utama@gmail.com', 'work.antigravity@company.com', 'cadangan.project@gmail.com'].includes(a.email)
       );
-      saveData();
     } else {
       accounts = [];
-      saveData();
     }
   } catch (e) {
-    console.error('Failed to load accounts:', e);
     accounts = [];
+  }
+
+  // 2. Jika terhubung dengan backend server (http://localhost:3333), sinkronkan dengan database.json
+  if (window.location.protocol.startsWith('http')) {
+    try {
+      const res = await fetch('/api/accounts');
+      if (res.ok) {
+        const dbData = await res.json();
+        if (Array.isArray(dbData) && dbData.length > 0) {
+          accounts = dbData;
+          saveData(false);
+          renderAll();
+        }
+      }
+    } catch (err) {
+      // Backend server belum aktif, tetap gunakan localStorage
+    }
   }
 
   const rawSound = localStorage.getItem(SOUND_KEY);
@@ -154,11 +182,21 @@ function loadData() {
   updateLabelSuggestion();
 }
 
-function saveData() {
+function saveData(syncBackend = true) {
+  // 1. Simpan ke LocalStorage browser
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
   } catch (e) {
-    console.error('Failed to save accounts:', e);
+    console.error('Failed to save to localStorage:', e);
+  }
+
+  // 2. Simpan ke database.json di server lokal jika berjalan
+  if (syncBackend && window.location.protocol.startsWith('http')) {
+    fetch('/api/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(accounts)
+    }).catch(() => {});
   }
 }
 
@@ -219,9 +257,76 @@ function formatCountdownTextSimple(rem) {
   return `${dStr}${hStr}:${mStr}:${sStr}`;
 }
 
-// --- Actions on Accounts (Fokus Utama Pengguna) ---
+// --- FUNGSI SIMPAN AKUN UTAMA ---
+function handleSaveAccount(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
 
-// 1. Kena Limit 5 Jam (Sprint Limit Cooldown)
+  const emailInput = document.getElementById('input-email');
+  const nameInput = document.getElementById('input-name');
+
+  if (!emailInput) {
+    console.error('Elemen input-email tidak ditemukan');
+    return;
+  }
+
+  const email = emailInput.value.trim();
+  let name = nameInput ? nameInput.value.trim() : '';
+
+  if (!email) {
+    showToast('Silakan masukkan email akun Google!', 'warning');
+    emailInput.focus();
+    return;
+  }
+
+  // Validasi format email dasar
+  if (!email.includes('@')) {
+    showToast('Format email tidak valid! Contoh: akun1@gmail.com', 'warning');
+    emailInput.focus();
+    return;
+  }
+
+  // Jika label kosong, gunakan rekomendasi urutan slot otomatis (Akun 1, Akun 2, dll)
+  if (!name) {
+    name = getNextAvailableAccountLabel();
+  }
+
+  // Cek apakah email sudah ada
+  const exists = accounts.some(a => a.email.toLowerCase() === email.toLowerCase());
+  if (exists) {
+    showToast(`Akun dengan email "${email}" sudah ada dalam daftar!`, 'warning');
+    return;
+  }
+
+  const newAcc = {
+    id: 'acc-' + Date.now(),
+    email,
+    name,
+    status: 'ready',
+    lockedAt: null,
+    resetAt: null,
+    durationMs: 0,
+    notified: false
+  };
+
+  accounts.push(newAcc);
+  sortAccounts();
+  saveData();
+  renderAll();
+
+  // Reset form dan perbarui rekomendasi nomor berikutnya
+  emailInput.value = '';
+  updateLabelSuggestion();
+  emailInput.focus();
+
+  showToast(`✅ Akun "${name}" (${email}) berhasil disimpan!`, 'success');
+}
+
+// --- Actions on Accounts ---
+
+// 1. Kena Limit 5 Jam
 function setSprintLimit(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
@@ -240,7 +345,7 @@ function setSprintLimit(accountId) {
   showToast(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}". Reset pada ${formatDateTime(reset.toISOString())}`, 'warning');
 }
 
-// 2. Kena Limit Mingguan (Weekly 7 Days Hard Cap)
+// 2. Kena Limit Mingguan
 function setWeeklyLimit(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
@@ -329,7 +434,6 @@ function renderRecommendation() {
       </div>
     `;
   } else {
-    // Semua akun sedang cooldown / limit!
     let nextAcc = null;
     let minTime = Infinity;
 
@@ -377,10 +481,15 @@ function renderMetrics() {
   const sprintCount = accounts.filter(a => a.status === 'sprint_cooldown').length;
   const weeklyCount = accounts.filter(a => a.status === 'weekly_locked').length;
 
-  document.getElementById('metric-total').textContent = total;
-  document.getElementById('metric-ready').textContent = readyCount;
-  document.getElementById('metric-sprint').textContent = sprintCount;
-  document.getElementById('metric-weekly').textContent = weeklyCount;
+  const mTotal = document.getElementById('metric-total');
+  const mReady = document.getElementById('metric-ready');
+  const mSprint = document.getElementById('metric-sprint');
+  const mWeekly = document.getElementById('metric-weekly');
+
+  if (mTotal) mTotal.textContent = total;
+  if (mReady) mReady.textContent = readyCount;
+  if (mSprint) mSprint.textContent = sprintCount;
+  if (mWeekly) mWeekly.textContent = weeklyCount;
 }
 
 // Render Kartu Akun
@@ -442,7 +551,6 @@ function renderCards() {
     const rem = getRemainingTime(acc.resetAt);
     const countdownHtml = formatCountdownDisplay(rem);
 
-    // Progress bar fill
     let progressPercent = 100;
     if (!isReady && acc.resetAt && acc.durationMs > 0 && rem && !rem.expired) {
       const elapsed = acc.durationMs - rem.diff;
@@ -585,73 +693,6 @@ function startLiveTicker() {
   }, 1000);
 }
 
-// --- Quick Add Form Handler ---
-function setupQuickAddForm() {
-  const form = document.getElementById('quick-add-form');
-  if (!form) return;
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    const emailInput = document.getElementById('input-email');
-    const nameInput = document.getElementById('input-name');
-
-    const email = emailInput.value.trim();
-    let name = nameInput.value.trim();
-
-    if (!email) {
-      showToast('Email akun harus diisi!', 'warning');
-      return;
-    }
-
-    // Jika label kosong, gunakan rekomendasi urutan slot otomatis (Akun 1, Akun 2, dll)
-    if (!name) {
-      name = getNextAvailableAccountLabel();
-    }
-
-    // Cek apakah email sudah ada
-    const exists = accounts.some(a => a.email.toLowerCase() === email.toLowerCase());
-    if (exists) {
-      showToast(`Akun dengan email "${email}" sudah terdaftar!`, 'warning');
-      return;
-    }
-
-    const newAcc = {
-      id: 'acc-' + Date.now(),
-      email,
-      name,
-      status: 'ready',
-      lockedAt: null,
-      resetAt: null,
-      durationMs: 0,
-      notified: false
-    };
-
-    // Urutkan akun berdasarkan nomor urut (Akun 1, Akun 2, Akun 3...)
-    accounts.push(newAcc);
-    accounts.sort((a, b) => {
-      const matchA = (a.name || '').match(/^Akun\s*(\d+)$/i);
-      const matchB = (b.name || '').match(/^Akun\s*(\d+)$/i);
-      if (matchA && matchB) {
-        return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
-      }
-      if (matchA) return -1;
-      if (matchB) return 1;
-      return (a.name || a.email).localeCompare(b.name || b.email);
-    });
-
-    saveData();
-    renderAll();
-
-    // Reset input dan perbarui rekomendasi label ke slot berikutnya
-    emailInput.value = '';
-    updateLabelSuggestion();
-    emailInput.focus();
-
-    showToast(`✅ Akun "${name}" (${email}) berhasil ditambahkan dan siap digunakan!`, 'success');
-  });
-}
-
 // --- Sound Button Toggle ---
 function updateSoundButtonUI() {
   const btn = document.getElementById('btn-toggle-sound');
@@ -735,7 +776,6 @@ function setupBackupModal() {
 
 // --- Setup Event Listeners ---
 function setupEventListeners() {
-  setupQuickAddForm();
   setupBackupModal();
 
   // Sound toggle
@@ -783,6 +823,13 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// --- Expose Global Functions to Window ---
+window.handleSaveAccount = handleSaveAccount;
+window.setSprintLimit = setSprintLimit;
+window.setWeeklyLimit = setWeeklyLimit;
+window.deleteAccount = deleteAccount;
+window.copyEmail = copyEmail;
 
 // --- Inisialisasi ---
 function initApp() {
