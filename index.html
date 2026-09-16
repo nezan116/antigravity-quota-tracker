@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Antigravity Quota & Token Reset Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=10">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
@@ -170,9 +170,31 @@
     </div>
   </div>
 
+  <!-- Modal: Pilih Profil Chrome -->
+  <div id="chrome-profile-modal" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>🌐 Pilih Profil Google Chrome</h2>
+        <button class="btn-close-modal" id="btn-close-profile-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" id="profile-modal-desc">Pilih profil Google Chrome di komputer Anda yang ingin dihubungkan dengan akun ini.</p>
+        <div class="search-box" style="margin-bottom: 14px; width: 100%;">
+          <input type="text" id="profile-search-input" placeholder="Cari nama profil atau email Chrome..." autocomplete="off" style="width: 100%;">
+        </div>
+        <div id="profiles-list-container" class="profiles-list-container">
+          <!-- List rendered via JS -->
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-profile-modal">Batal</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

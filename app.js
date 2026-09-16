@@ -13,6 +13,8 @@ let soundEnabled = true;
 let currentFilter = 'recommended';
 let searchQuery = '';
 let countdownInterval = null;
+let chromeProfilesList = [];
+let activeProfileTargetAccountId = null;
 
 // --- Algoritma Rekomendasi Urutan Label (Akun 1, Akun 2, dst) ---
 // Jika akun dihapus, nomor slot yang kosong otomatis direkomendasikan kembali
@@ -235,6 +237,7 @@ async function loadData() {
   soundEnabled = rawSound !== null ? JSON.parse(rawSound) : true;
   updateSoundButtonUI();
   updateLabelSuggestion();
+  fetchChromeProfiles();
 }
 
 function saveData(syncBackend = true) {
@@ -771,6 +774,17 @@ function renderCards() {
       progressPercent = Math.min(100, Math.max(0, Math.round((elapsed / acc.durationMs) * 100)));
     }
 
+    // Deteksi profil Google Chrome untuk akun ini
+    let profName = acc.chromeProfileName;
+    let profDir = acc.chromeProfileDir;
+    if (!profDir && chromeProfilesList.length > 0) {
+      const match = chromeProfilesList.find(p => p.email === (acc.email || '').trim().toLowerCase());
+      if (match) {
+        profDir = match.dir;
+        profName = match.name;
+      }
+    }
+
     return `
       <div class="account-card ${cardClass}" id="card-${acc.id}">
         <!-- Card Top: Label & Email Jelas -->
@@ -785,6 +799,16 @@ function renderCards() {
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
                 Salin Email
+              </button>
+              <button class="btn-open-chrome" onclick="openChromeForAccount('${acc.id}')" title="Buka Profil Google Chrome di Komputer: ${escapeHtml(profName ? `${profName} (${acc.email})` : acc.email)}">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <circle cx="12" cy="12" r="4"/>
+                  <line x1="21.17" y1="8" x2="12" y2="8"/>
+                  <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+                  <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+                </svg>
+                <span>Buka Chrome${profName ? ` (${escapeHtml(profName)})` : ''}</span>
               </button>
             </div>
             <div class="card-email-row" style="margin-top: 4px;">
@@ -917,7 +941,12 @@ function renderCards() {
 
         <!-- Card Bottom -->
         <div class="card-bottom">
-          <span style="font-weight: 600; color: #a5b4fc;">${escapeHtml(acc.name || 'Akun')}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 600; color: #a5b4fc;">${escapeHtml(acc.name || 'Akun')}</span>
+            <button type="button" onclick="openChromeProfileModal('${acc.id}')" title="Ganti atau tautkan profil Chrome secara manual" style="background: none; border: none; color: #818cf8; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">
+              ${profName ? '⚙️ Ubah Profil' : '🔗 Tautkan Profil'}
+            </button>
+          </div>
           <button class="btn-delete-card" onclick="deleteAccount('${acc.id}')" title="Hapus akun ini agar nomor urut bisa dipakai ulang">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
@@ -1128,6 +1157,13 @@ function setupEventListeners() {
     clearSearch();
   });
 
+  // Chrome Profile Modal listeners
+  document.getElementById('btn-close-profile-modal')?.addEventListener('click', closeChromeProfileModal);
+  document.getElementById('btn-cancel-profile-modal')?.addEventListener('click', closeChromeProfileModal);
+  document.getElementById('profile-search-input')?.addEventListener('input', (e) => {
+    renderProfilesListInModal(e.target.value);
+  });
+
   // Minta izin notifikasi browser
   window.addEventListener('click', () => {
     requestNotificationPermission();
@@ -1161,6 +1197,173 @@ function escapeHtml(str) {
 }
 
 // --- Expose Global Functions to Window ---
+// --- Google Chrome Profile Launcher ---
+function getBackendBaseUrl() {
+  if (window.location.protocol.startsWith('http') && (window.location.port === '3333' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return '';
+  }
+  return 'http://localhost:3333';
+}
+
+async function fetchChromeProfiles() {
+  try {
+    const res = await fetch(getBackendBaseUrl() + '/api/chrome-profiles');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.profiles)) {
+        chromeProfilesList = data.profiles;
+        let changed = false;
+        accounts.forEach(acc => {
+          if (!acc.chromeProfileDir && acc.email) {
+            const cleanEmail = acc.email.trim().toLowerCase();
+            const match = chromeProfilesList.find(p => p.email === cleanEmail);
+            if (match) {
+              acc.chromeProfileDir = match.dir;
+              acc.chromeProfileName = match.name;
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          saveData(true);
+        }
+        renderCards();
+      }
+    }
+  } catch (err) {
+    // Server lokal belum aktif atau offline
+  }
+}
+
+async function openChromeForAccount(accountId) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const btn = document.querySelector(`#card-${accountId} .btn-open-chrome`);
+  if (btn) btn.classList.add('loading');
+
+  showToast(`🚀 Membuka Chrome untuk ${acc.name || acc.email}...`, 'info');
+
+  try {
+    const res = await fetch(getBackendBaseUrl() + '/api/open-chrome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: acc.email,
+        profileDir: acc.chromeProfileDir
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      if (data.profileDir && !acc.chromeProfileDir) {
+        acc.chromeProfileDir = data.profileDir;
+        acc.chromeProfileName = data.profileName;
+        saveData(true);
+        renderCards();
+      }
+      showToast(`🌐 Berhasil membuka Chrome: "${data.profileName || data.profileDir}"`, 'success');
+    } else if (res.status === 404 || !data.success) {
+      showToast('Pilih profil Chrome yang sesuai untuk akun ini', 'warning');
+      openChromeProfileModal(accountId);
+    } else {
+      showToast(data.error || 'Gagal membuka Chrome', 'error');
+    }
+  } catch (err) {
+    console.warn('Gagal koneksi ke server lokal:', err);
+    showToast('⚠️ Server lokal belum berjalan! Buka buka-aplikasi.bat di komputer Anda.', 'warning');
+    if (confirm(`Server lokal belum aktif untuk meluncurkan Chrome otomatis di Windows.\n\nApakah Anda ingin membuka Google Account Switcher di tab baru untuk ${acc.email}?`)) {
+      window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(acc.email)}`, '_blank');
+    }
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
+// --- Modal Pemilih Profil Chrome ---
+function openChromeProfileModal(accountId) {
+  activeProfileTargetAccountId = accountId;
+  const acc = accounts.find(a => a.id === accountId);
+  const modal = document.getElementById('chrome-profile-modal');
+  const desc = document.getElementById('profile-modal-desc');
+  const searchInput = document.getElementById('profile-search-input');
+
+  if (desc && acc) {
+    desc.innerHTML = `Pilih profil Google Chrome untuk akun: <strong>${escapeHtml(acc.name || acc.email)}</strong> (${escapeHtml(acc.email)})`;
+  }
+  if (searchInput) searchInput.value = '';
+
+  renderProfilesListInModal();
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeChromeProfileModal() {
+  const modal = document.getElementById('chrome-profile-modal');
+  if (modal) modal.classList.add('hidden');
+  activeProfileTargetAccountId = null;
+}
+
+function renderProfilesListInModal(filterQuery = '') {
+  const container = document.getElementById('profiles-list-container');
+  if (!container) return;
+
+  const q = filterQuery.trim().toLowerCase();
+  const filtered = chromeProfilesList.filter(p => {
+    if (!q) return true;
+    return (p.name || '').toLowerCase().includes(q) ||
+           (p.email || '').toLowerCase().includes(q) ||
+           (p.dir || '').toLowerCase().includes(q);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
+        ${chromeProfilesList.length === 0 ? 'Sedang memuat profil Chrome atau server lokal belum berjalan...' : 'Tidak ada profil Chrome yang cocok dengan pencarian.'}
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(p => {
+    return `
+      <button type="button" class="profile-item-btn" onclick="selectChromeProfile('${escapeHtml(p.dir)}')">
+        <div class="profile-item-left">
+          <div class="profile-item-name">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#60a5fa" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="4"/>
+              <line x1="21.17" y1="8" x2="12" y2="8"/>
+              <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+              <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+            </svg>
+            ${escapeHtml(p.name)}
+          </div>
+          <div class="profile-item-email">${escapeHtml(p.email || 'Tidak ada email terikat')}</div>
+        </div>
+        <span class="profile-item-dir">${escapeHtml(p.dir)}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function selectChromeProfile(profileDir) {
+  if (!activeProfileTargetAccountId) return;
+  const acc = accounts.find(a => a.id === activeProfileTargetAccountId);
+  const prof = chromeProfilesList.find(p => p.dir === profileDir);
+
+  if (acc && prof) {
+    acc.chromeProfileDir = prof.dir;
+    acc.chromeProfileName = prof.name;
+    saveData(true);
+    closeChromeProfileModal();
+    renderCards();
+    showToast(`✅ Profil "${prof.name}" berhasil dihubungkan ke ${acc.name || acc.email}!`, 'success');
+    openChromeForAccount(acc.id);
+  }
+}
+
+// --- Expose Global Functions to Window ---
 window.handleSaveAccount = handleSaveAccount;
 window.setSprintLimit = setSprintLimit;
 window.setWeeklyLimit = setWeeklyLimit;
@@ -1173,6 +1376,10 @@ window.quickAdjustHours = quickAdjustHours;
 window.quickAdjustDays = quickAdjustDays;
 window.quickAdjustMins = quickAdjustMins;
 window.clearSearch = clearSearch;
+window.openChromeForAccount = openChromeForAccount;
+window.openChromeProfileModal = openChromeProfileModal;
+window.closeChromeProfileModal = closeChromeProfileModal;
+window.selectChromeProfile = selectChromeProfile;
 
 // --- Inisialisasi ---
 function initApp() {

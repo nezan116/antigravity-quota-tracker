@@ -539,6 +539,105 @@ body {
   color: #fff;
 }
 
+/* Tombol Buka Profil Chrome Otomatis */
+.btn-open-chrome {
+  background: linear-gradient(135deg, rgba(66, 133, 244, 0.15), rgba(52, 168, 83, 0.15));
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  color: #93c5fd;
+  cursor: pointer;
+  padding: 3px 9px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.01em;
+}
+
+.btn-open-chrome:hover {
+  background: linear-gradient(135deg, rgba(66, 133, 244, 0.35), rgba(52, 168, 83, 0.3));
+  border-color: rgba(147, 197, 253, 0.85);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(66, 133, 244, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-open-chrome:active {
+  transform: translateY(0);
+}
+
+.btn-open-chrome svg {
+  color: #60a5fa;
+  flex-shrink: 0;
+}
+
+.btn-open-chrome.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Modal Pemilih Profil Chrome */
+.profiles-list-container {
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.profile-item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-main);
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.profile-item-btn:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: var(--primary-color);
+  transform: translateX(2px);
+}
+
+.profile-item-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-item-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-item-email {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.profile-item-dir {
+  font-size: 11px;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
 .card-name {
   font-size: 13px;
   font-weight: 600;
