@@ -221,6 +221,9 @@ async function loadData() {
           accounts = dbData;
           saveData(false);
           renderAll();
+        } else if (Array.isArray(dbData) && dbData.length === 0 && accounts.length > 0) {
+          // Sinkronkan akun dari localStorage ke database.json di server lokal
+          saveData(true);
         }
       }
     } catch (err) {
@@ -930,7 +933,6 @@ function renderCards() {
 
 function renderAll() {
   renderMetrics();
-  renderRecommendation();
   renderCards();
 }
 
