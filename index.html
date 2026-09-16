@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Antigravity Quota & Token Reset Tracker</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
@@ -41,11 +41,6 @@
         </button>
       </div>
     </header>
-
-    <!-- Top Recommendation Bar -->
-    <section id="recommendation-banner" class="recommendation-banner">
-      <!-- Generated via JavaScript -->
-    </section>
 
     <!-- Quick Add Account Bar (Sangat Mudah & Cepat) -->
     <section class="quick-add-card">
@@ -98,7 +93,8 @@
     <!-- Filter & Toolbar -->
     <div class="toolbar">
       <div class="filter-pills">
-        <button class="pill active" data-filter="all">Semua Akun</button>
+        <button class="pill active" data-filter="recommended">⭐ Rekomendasi (Fresh Teratas)</button>
+        <button class="pill" data-filter="all">Semua Akun (Urut Nomor)</button>
         <button class="pill" data-filter="ready">Siap Pakai (Ready)</button>
         <button class="pill" data-filter="sprint">Cooldown 5 Jam</button>
         <button class="pill" data-filter="weekly">Limit Mingguan (7 Hari)</button>
@@ -177,6 +173,6 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

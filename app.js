@@ -10,7 +10,7 @@ const SOUND_KEY = 'antigravity_sound_enabled';
 
 let accounts = [];
 let soundEnabled = true;
-let currentFilter = 'all';
+let currentFilter = 'recommended';
 let searchQuery = '';
 let countdownInterval = null;
 
@@ -47,17 +47,69 @@ function updateLabelSuggestion() {
   }
 }
 
-function sortAccounts() {
-  accounts.sort((a, b) => {
-    const matchA = (a.name || '').match(/^Akun\s*(\d+)$/i);
-    const matchB = (b.name || '').match(/^Akun\s*(\d+)$/i);
-    if (matchA && matchB) {
-      return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
+function compareAccountNames(a, b) {
+  const matchA = (a.name || '').match(/^Akun\s*(\d+)$/i);
+  const matchB = (b.name || '').match(/^Akun\s*(\d+)$/i);
+  if (matchA && matchB) {
+    return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
+  }
+  if (matchA) return -1;
+  if (matchB) return 1;
+  return (a.name || a.email).localeCompare(b.name || b.email);
+}
+
+// Mengurutkan akun berdasarkan rekomendasi:
+// 1. Akun siap pakai (ready) selalu di atas
+// 2. Di antara yang ready: yang paling jarang digunakan (fresh / belum dipakai / terlama tidak dipakai) ada di paling kiri atas
+// 3. Akun yang sedang limit/cooldown di bawahnya, diurutkan sisa waktu tercepat pulih
+function sortAccountsByRecommendation(list) {
+  return [...list].sort((a, b) => {
+    // 1. Status Ready selalu di atas yang Cooldown / Locked
+    if (a.status === 'ready' && b.status !== 'ready') return -1;
+    if (a.status !== 'ready' && b.status === 'ready') return 1;
+
+    // 2. Keduanya READY: urutkan berdasarkan kesegaran (Fresh / Jarang Digunakan)
+    if (a.status === 'ready' && b.status === 'ready') {
+      const usedA = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+      const usedB = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+
+      // Belum pernah dipakai sama sekali -> paling atas (fresh)
+      if (usedA === 0 && usedB !== 0) return -1;
+      if (usedA !== 0 && usedB === 0) return 1;
+
+      // Keduanya belum pernah dipakai -> urut nomor akun (Akun 1, Akun 2, ...)
+      if (usedA === 0 && usedB === 0) {
+        return compareAccountNames(a, b);
+      }
+
+      // Keduanya pernah dipakai -> yang terakhir dipakai paling lama (timestamp paling lampau) naik ke atas
+      if (usedA !== usedB) {
+        return usedA - usedB;
+      }
+
+      // Jika sama, akun dengan total pemakaian paling sedikit di atas
+      const countA = a.useCount || 0;
+      const countB = b.useCount || 0;
+      if (countA !== countB) {
+        return countA - countB;
+      }
+
+      return compareAccountNames(a, b);
     }
-    if (matchA) return -1;
-    if (matchB) return 1;
-    return (a.name || a.email).localeCompare(b.name || b.email);
+
+    // 3. Keduanya SEDANG LIMIT (Cooldown / Locked): urutkan sisa waktu tercepat pulih
+    const resetA = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
+    const resetB = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
+    if (resetA !== resetB) {
+      return resetA - resetB;
+    }
+
+    return compareAccountNames(a, b);
   });
+}
+
+function sortAccounts() {
+  accounts.sort(compareAccountNames);
 }
 
 // --- Audio Synthesizer (Web Audio API) ---
@@ -339,6 +391,8 @@ function setSprintLimit(accountId) {
   acc.resetAt = reset.toISOString();
   acc.durationMs = 5 * 3600 * 1000;
   acc.notified = false;
+  acc.lastUsedAt = now.toISOString();
+  acc.useCount = (acc.useCount || 0) + 1;
 
   saveData();
   renderAll();
@@ -358,6 +412,8 @@ function setWeeklyLimit(accountId) {
   acc.resetAt = reset.toISOString();
   acc.durationMs = 7 * 24 * 3600 * 1000;
   acc.notified = false;
+  acc.lastUsedAt = now.toISOString();
+  acc.useCount = (acc.useCount || 0) + 1;
 
   saveData();
   renderAll();
@@ -450,6 +506,8 @@ function quickSetHours(accountId, targetHours) {
   acc.resetAt = reset.toISOString();
   acc.durationMs = totalMs;
   acc.notified = false;
+  acc.lastUsedAt = now.toISOString();
+  acc.useCount = (acc.useCount || 0) + 1;
 
   saveData();
   renderAll();
@@ -470,6 +528,8 @@ function quickSetDays(accountId, targetDays) {
   acc.resetAt = reset.toISOString();
   acc.durationMs = totalMs;
   acc.notified = false;
+  acc.lastUsedAt = now.toISOString();
+  acc.useCount = (acc.useCount || 0) + 1;
 
   saveData();
   renderAll();
@@ -613,90 +673,6 @@ function quickAdjustMins(accountId, deltaMins) {
 
 // --- Render UI ---
 
-// Banner Rekomendasi Teratas
-function renderRecommendation() {
-  const banner = document.getElementById('recommendation-banner');
-  if (!banner) return;
-
-  if (accounts.length === 0) {
-    banner.className = 'recommendation-banner';
-    banner.innerHTML = `
-      <div class="rec-content">
-        <span class="rec-badge">👋</span>
-        <div>
-          <div class="rec-title">Selamat Datang di Antigravity Token Tracker!</div>
-          <div class="rec-desc">Ketik email Anda pada form di bawah lalu klik <strong>Simpan Akun</strong> untuk mulai memantau token.</div>
-        </div>
-      </div>
-    `;
-    return;
-  }
-
-  const readyAccounts = accounts.filter(a => a.status === 'ready');
-
-  if (readyAccounts.length > 0) {
-    const topAcc = readyAccounts[0];
-    const accLabel = topAcc.name ? `${escapeHtml(topAcc.name)}: ` : '';
-    banner.className = 'recommendation-banner';
-    banner.innerHTML = `
-      <div class="rec-content">
-        <span class="rec-badge">🟢</span>
-        <div>
-          <div class="rec-title">Rekomendasi Akun Siap Pakai Sekarang: <strong>${accLabel}${escapeHtml(topAcc.email)}</strong></div>
-          <div class="rec-desc">Status: <strong>Bisa Digunakan</strong> &bull; Token kuota aktif dan siap dipakai!</div>
-        </div>
-      </div>
-      <div class="rec-action">
-        <button class="btn btn-primary" onclick="copyEmail('${escapeHtml(topAcc.email)}')">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-          </svg>
-          Salin Email Ini
-        </button>
-      </div>
-    `;
-  } else {
-    let nextAcc = null;
-    let minTime = Infinity;
-
-    accounts.forEach(a => {
-      if (a.resetAt) {
-        const diff = new Date(a.resetAt).getTime() - Date.now();
-        if (diff > 0 && diff < minTime) {
-          minTime = diff;
-          nextAcc = a;
-        }
-      }
-    });
-
-    banner.className = 'recommendation-banner all-locked';
-    if (nextAcc) {
-      const rem = getRemainingTime(nextAcc.resetAt);
-      const accDisplay = nextAcc.name ? `${nextAcc.name} (${nextAcc.email})` : nextAcc.email;
-      banner.innerHTML = `
-        <div class="rec-content">
-          <span class="rec-badge">⏳</span>
-          <div>
-            <div class="rec-title">Semua Akun Sedang Kena Limit!</div>
-            <div class="rec-desc">Akun tercepat yang akan pulih: <strong>${escapeHtml(accDisplay)}</strong> dalam <strong>${formatCountdownTextSimple(rem)}</strong> (${formatDateTime(nextAcc.resetAt)})</div>
-          </div>
-        </div>
-      `;
-    } else {
-      banner.innerHTML = `
-        <div class="rec-content">
-          <span class="rec-badge">⚠️</span>
-          <div>
-            <div class="rec-title">Semua Akun Sedang Kena Limit</div>
-            <div class="rec-desc">Akun akan pulih otomatis saat waktu hitung mundur selesai.</div>
-          </div>
-        </div>
-      `;
-    }
-  }
-}
-
 // Metrik Angka
 function renderMetrics() {
   const total = accounts.length;
@@ -743,6 +719,15 @@ function renderCards() {
 
   if (emptyState) emptyState.classList.add('hidden');
 
+  // Urutkan akun:
+  if (currentFilter === 'all') {
+    // Urut nomor akun: Akun 1, Akun 2, dst
+    filtered.sort(compareAccountNames);
+  } else {
+    // Default & Rekomendasi: Akun Fresh / Jarang Digunakan di kiri atas!
+    filtered = sortAccountsByRecommendation(filtered);
+  }
+
   if (filtered.length === 0) {
     grid.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-dim);">
@@ -752,14 +737,17 @@ function renderCards() {
     return;
   }
 
-  grid.innerHTML = filtered.map(acc => {
+  grid.innerHTML = filtered.map((acc, index) => {
     const isReady = acc.status === 'ready';
     const isSprint = acc.status === 'sprint_cooldown';
     const isWeekly = acc.status === 'weekly_locked';
 
+    // Akun teratas di paling kiri atas adalah Rekomendasi Utama
+    const isTopRecommended = (currentFilter === 'recommended' || currentFilter === 'ready') && index === 0 && isReady;
+
     let statusClass = 'ready';
     let statusLabel = '🟢 BISA DIGUNAKAN';
-    let cardClass = 'status-ready';
+    let cardClass = 'status-ready' + (isTopRecommended ? ' is-top-recommended' : '');
 
     if (isSprint) {
       statusClass = 'sprint';
@@ -787,6 +775,7 @@ function renderCards() {
           <div class="card-account-info">
             <div class="card-label-badge-row">
               <span class="card-account-badge">${escapeHtml(acc.name || 'Akun')}</span>
+              ${isTopRecommended ? `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>` : ''}
               <button class="btn-copy-email" onclick="copyEmail('${escapeHtml(acc.email)}')" title="Salin Email">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
