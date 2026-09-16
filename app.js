@@ -13,7 +13,485 @@ let soundEnabled = true;
 let currentFilter = 'recommended';
 let searchQuery = '';
 let countdownInterval = null;
-let chromeProfilesList = [];
+// Daftar profil Chrome yang terdeteksi otomatis (Bekerja 100% online di GitHub Pages)
+const EMBEDDED_CHROME_PROFILES = [
+  {
+    "dir": "Default",
+    "email": "grendy70@gmail.com",
+    "name": "A | Nezan"
+  },
+  {
+    "dir": "Profile 1",
+    "email": "mzhter75@gmail.com",
+    "name": "NZ001"
+  },
+  {
+    "dir": "Profile 10",
+    "email": "varkamidas@gmail.com",
+    "name": "NZ011"
+  },
+  {
+    "dir": "Profile 100",
+    "email": "zarraheejab@gmail.com",
+    "name": "NEZ173"
+  },
+  {
+    "dir": "Profile 101",
+    "email": "canayacollection6@gmail.com",
+    "name": "NEZ174"
+  },
+  {
+    "dir": "Profile 102",
+    "email": "hannafashionable@gmail.com",
+    "name": "NEZ175"
+  },
+  {
+    "dir": "Profile 103",
+    "email": "rezkyagrande@gmail.com",
+    "name": "NEZ176"
+  },
+  {
+    "dir": "Profile 104",
+    "email": "butikanisa0@gmail.com",
+    "name": "NEZ177"
+  },
+  {
+    "dir": "Profile 105",
+    "email": "chanayafitzone@gmail.com",
+    "name": "NEZ178"
+  },
+  {
+    "dir": "Profile 106",
+    "email": "hannasportstation@gmail.com",
+    "name": "NEZ179"
+  },
+  {
+    "dir": "Profile 109",
+    "email": "shantikaazara@gmail.com",
+    "name": "NEZ157"
+  },
+  {
+    "dir": "Profile 11",
+    "email": "skrikangel@gmail.com",
+    "name": "NEZ110"
+  },
+  {
+    "dir": "Profile 110",
+    "email": "hilyastore171@gmail.com",
+    "name": "NEZ161"
+  },
+  {
+    "dir": "Profile 111",
+    "email": "khansaomara@gmail.com",
+    "name": "NEZ162"
+  },
+  {
+    "dir": "Profile 112",
+    "email": "stylestrom.fashion@gmail.com",
+    "name": "NEZ181"
+  },
+  {
+    "dir": "Profile 114",
+    "email": "esjuqae342@mihba.site",
+    "name": "a data suhu"
+  },
+  {
+    "dir": "Profile 12",
+    "email": "ronaldinhooutfit@gmail.com",
+    "name": "NEZ111"
+  },
+  {
+    "dir": "Profile 13",
+    "email": "marchstore314@gmail.com",
+    "name": "NEZ112"
+  },
+  {
+    "dir": "Profile 14",
+    "email": "mprovideoofficial@gmail.com",
+    "name": "A MPRO EMAIL"
+  },
+  {
+    "dir": "Profile 15",
+    "email": "sidosugeh2026@gmail.com",
+    "name": "A Email Test"
+  },
+  {
+    "dir": "Profile 16",
+    "email": "valxqei862@daamul.site",
+    "name": "NEZ100"
+  },
+  {
+    "dir": "Profile 17",
+    "email": "orueprn039@daamul.site",
+    "name": "NEZ101"
+  },
+  {
+    "dir": "Profile 18",
+    "email": "cueyebz248@daamul.site",
+    "name": "NEZ102"
+  },
+  {
+    "dir": "Profile 19",
+    "email": "iaqngap566@daamul.site",
+    "name": "NEZ103"
+  },
+  {
+    "dir": "Profile 2",
+    "email": "wearleonel@gmail.com",
+    "name": "NZ002"
+  },
+  {
+    "dir": "Profile 20",
+    "email": "uhaquop337@daamul.site",
+    "name": "NEZ104"
+  },
+  {
+    "dir": "Profile 21",
+    "email": "diontud031@daamul.site",
+    "name": "NEZ105"
+  },
+  {
+    "dir": "Profile 23",
+    "email": "lqufvux084@daamul.site",
+    "name": "NEZ106"
+  },
+  {
+    "dir": "Profile 24",
+    "email": "aqjhufr814@daamul.site",
+    "name": "NEZ107"
+  },
+  {
+    "dir": "Profile 25",
+    "email": "jamoege797@daamul.site",
+    "name": "NEZ108"
+  },
+  {
+    "dir": "Profile 26",
+    "email": "ltzoafa631@daamul.site",
+    "name": "NEZ109"
+  },
+  {
+    "dir": "Profile 28",
+    "email": "dunhiilfilter889@gmail.com",
+    "name": "NEZ114"
+  },
+  {
+    "dir": "Profile 29",
+    "email": "thinkpads2134@gmail.com",
+    "name": "NEZ115"
+  },
+  {
+    "dir": "Profile 3",
+    "email": "messiwear7@gmail.com",
+    "name": "NZ003"
+  },
+  {
+    "dir": "Profile 30",
+    "email": "cookiebagustumbal@gmail.com",
+    "name": "NEZ116"
+  },
+  {
+    "dir": "Profile 31",
+    "email": "cookiebagus5@gmail.com",
+    "name": "NEZ117"
+  },
+  {
+    "dir": "Profile 34",
+    "email": "nezan116@gmail.com",
+    "name": "A NEZAN"
+  },
+  {
+    "dir": "Profile 36",
+    "email": "cookietumbal379@gmail.com",
+    "name": "NEZ119"
+  },
+  {
+    "dir": "Profile 37",
+    "email": "shopelemahpol50@gmail.com",
+    "name": "NEZ120"
+  },
+  {
+    "dir": "Profile 38",
+    "email": "shopelemahpol23@gmail.com",
+    "name": "NEZ121"
+  },
+  {
+    "dir": "Profile 39",
+    "email": "kangcookie00@gmail.com",
+    "name": "NEZ122"
+  },
+  {
+    "dir": "Profile 40",
+    "email": "shopelemah980@gmail.com",
+    "name": "NEZ123"
+  },
+  {
+    "dir": "Profile 41",
+    "email": "shopelemah7@gmail.com",
+    "name": "NEZ124"
+  },
+  {
+    "dir": "Profile 42",
+    "email": "shopelemah@gmail.com",
+    "name": "NEZ125"
+  },
+  {
+    "dir": "Profile 43",
+    "email": "shopelemah72@gmail.com",
+    "name": "NEZ126"
+  },
+  {
+    "dir": "Profile 44",
+    "email": "shopelemah8@gmail.com",
+    "name": "NEZ127"
+  },
+  {
+    "dir": "Profile 46",
+    "email": "shopelemah30@gmail.com",
+    "name": "NEZ118"
+  },
+  {
+    "dir": "Profile 47",
+    "email": "shopelemah87@gmail.com",
+    "name": "NEZ128"
+  },
+  {
+    "dir": "Profile 48",
+    "email": "shopelemah353@gmail.com",
+    "name": "NEZ129"
+  },
+  {
+    "dir": "Profile 49",
+    "email": "shopebaik20@gmail.com",
+    "name": "NEZ130"
+  },
+  {
+    "dir": "Profile 5",
+    "email": "nalensan12@gmail.com",
+    "name": "NEZ113"
+  },
+  {
+    "dir": "Profile 50",
+    "email": "shopekuat240@gmail.com",
+    "name": "NEZ131"
+  },
+  {
+    "dir": "Profile 51",
+    "email": "shopekuat28@gmail.com",
+    "name": "NEZ132"
+  },
+  {
+    "dir": "Profile 52",
+    "email": "shopekuat4@gmail.com",
+    "name": "NEZ133"
+  },
+  {
+    "dir": "Profile 53",
+    "email": "shopekuat82@gmail.com",
+    "name": "NEZ134"
+  },
+  {
+    "dir": "Profile 54",
+    "email": "shopebaik76@gmail.com",
+    "name": "NEZ135"
+  },
+  {
+    "dir": "Profile 55",
+    "email": "shopebaik86@gmail.com",
+    "name": "NEZ136"
+  },
+  {
+    "dir": "Profile 56",
+    "email": "zhakirnaik300@gmail.com",
+    "name": "NEZ137"
+  },
+  {
+    "dir": "Profile 57",
+    "email": "namedoor02@gmail.com",
+    "name": "NEZ138"
+  },
+  {
+    "dir": "Profile 58",
+    "email": "laiylaproject@gmail.com",
+    "name": "NEZ139"
+  },
+  {
+    "dir": "Profile 59",
+    "email": "tumbalcokie2@gmail.com",
+    "name": "NEZ140"
+  },
+  {
+    "dir": "Profile 6",
+    "email": "amnezan96@gmail.com",
+    "name": "NZ006"
+  },
+  {
+    "dir": "Profile 60",
+    "email": "cookietumbal10@gmail.com",
+    "name": "NEZ141"
+  },
+  {
+    "dir": "Profile 61",
+    "email": "cokiejembhot@gmail.com",
+    "name": "NEZ142"
+  },
+  {
+    "dir": "Profile 62",
+    "email": "shopelemah2@gmail.com",
+    "name": "NEZ143"
+  },
+  {
+    "dir": "Profile 67",
+    "email": "recalrestok@gmail.com",
+    "name": "NEZ144"
+  },
+  {
+    "dir": "Profile 68",
+    "email": "nexaoutfit210@gmail.com",
+    "name": "NEZ145"
+  },
+  {
+    "dir": "Profile 69",
+    "email": "ministyle60@gmail.com",
+    "name": "NEZ146"
+  },
+  {
+    "dir": "Profile 7",
+    "email": "nezan116@gmail.com",
+    "name": "NZ007"
+  },
+  {
+    "dir": "Profile 70",
+    "email": "glamourique.style@gmail.com",
+    "name": "NEZ147"
+  },
+  {
+    "dir": "Profile 71",
+    "email": "vallenclothstore@gmail.com",
+    "name": "NEZ148"
+  },
+  {
+    "dir": "Profile 72",
+    "email": "zahrahafizha83@gmail.com",
+    "name": "NEZ150"
+  },
+  {
+    "dir": "Profile 73",
+    "email": "aurellinacaressa@gmail.com",
+    "name": "NEZ149"
+  },
+  {
+    "dir": "Profile 74",
+    "email": "aisyahaqila9999@gmail.com",
+    "name": "NEZ150"
+  },
+  {
+    "dir": "Profile 75",
+    "email": "anindyasaputri77@gmail.com",
+    "name": "NEZ151"
+  },
+  {
+    "dir": "Profile 77",
+    "email": "anayavanya069@gmail.com",
+    "name": "NEZ152"
+  },
+  {
+    "dir": "Profile 78",
+    "email": "zivannaelisse@gmail.com",
+    "name": "NEZ153"
+  },
+  {
+    "dir": "Profile 79",
+    "email": "aisyaazzahra231@gmail.com",
+    "name": "NEZ154"
+  },
+  {
+    "dir": "Profile 8",
+    "email": "zhakirnaik300@gmail.com",
+    "name": "NZ008"
+  },
+  {
+    "dir": "Profile 80",
+    "email": "staylishalpha@gmail.com",
+    "name": "NEZ155"
+  },
+  {
+    "dir": "Profile 85",
+    "email": "trendladybags@gmail.com",
+    "name": "NEZ158"
+  },
+  {
+    "dir": "Profile 86",
+    "email": "aftalive4@gmail.com",
+    "name": "NEZ159"
+  },
+  {
+    "dir": "Profile 87",
+    "email": "aftalive7@gmail.com",
+    "name": "NEZ160"
+  },
+  {
+    "dir": "Profile 88",
+    "email": "agniarahma777@gmail.com",
+    "name": "NEZ156"
+  },
+  {
+    "dir": "Profile 9",
+    "email": "hutaostore088@gmail.com",
+    "name": "NZ010"
+  },
+  {
+    "dir": "Profile 90",
+    "email": "aftalive@gmail.com",
+    "name": "NEZ163"
+  },
+  {
+    "dir": "Profile 91",
+    "email": "najmaputri443@gmail.com",
+    "name": "NEZ164"
+  },
+  {
+    "dir": "Profile 92",
+    "email": "aizacyra@gmail.com",
+    "name": "NEZ165"
+  },
+  {
+    "dir": "Profile 93",
+    "email": "ootdfrenky@gmail.com",
+    "name": "NEZ166"
+  },
+  {
+    "dir": "Profile 94",
+    "email": "berkahshop231@gmail.com",
+    "name": "NEZ167"
+  },
+  {
+    "dir": "Profile 95",
+    "email": "lylyanimey@gmail.com",
+    "name": "NEZ168"
+  },
+  {
+    "dir": "Profile 96",
+    "email": "roberttaunan10@gmail.com",
+    "name": "NEZ169"
+  },
+  {
+    "dir": "Profile 97",
+    "email": "juliaeka5568@gmail.com",
+    "name": "NEZ170"
+  },
+  {
+    "dir": "Profile 98",
+    "email": "gayagamize@gmail.com",
+    "name": "NEZ171"
+  },
+  {
+    "dir": "Profile 99",
+    "email": "innayacollection99@gmail.com",
+    "name": "NEZ172"
+  }
+];
+let chromeProfilesList = [...EMBEDDED_CHROME_PROFILES];
 let activeProfileTargetAccountId = null;
 
 // --- Algoritma Rekomendasi Urutan Label (Akun 1, Akun 2, dst) ---
@@ -946,6 +1424,10 @@ function renderCards() {
             <button type="button" onclick="openChromeProfileModal('${acc.id}')" title="Ganti atau tautkan profil Chrome secara manual" style="background: none; border: none; color: #818cf8; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">
               ${profName ? '⚙️ Ubah Profil' : '🔗 Tautkan Profil'}
             </button>
+            <span style="color: rgba(255,255,255,0.2); font-size: 10px;">•</span>
+            <button type="button" onclick="openGoogleAccountChooser('${escapeHtml(acc.email)}')" title="Buka Google Login / Account Chooser di Tab Baru" style="background: none; border: none; color: #38bdf8; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">
+              🌐 Tab Google
+            </button>
           </div>
           <button class="btn-delete-card" onclick="deleteAccount('${acc.id}')" title="Hapus akun ini agar nomor urut bisa dipakai ulang">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
@@ -1235,50 +1717,49 @@ async function fetchChromeProfiles() {
   }
 }
 
+function launchViaWindowsProtocol(profileDir) {
+  const cleanDir = encodeURIComponent(profileDir);
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = `agychrome://${cleanDir}/`;
+  document.body.appendChild(iframe);
+  setTimeout(() => iframe.remove(), 2500);
+}
+
+function openGoogleAccountChooser(email) {
+  if (!email) return;
+  showToast(`🌐 Membuka Google Account Switcher untuk ${email}...`, 'info');
+  window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(email)}`, '_blank');
+}
+
 async function openChromeForAccount(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
-  const btn = document.querySelector(`#card-${accountId} .btn-open-chrome`);
-  if (btn) btn.classList.add('loading');
+  let targetDir = acc.chromeProfileDir;
+  let profName = acc.chromeProfileName;
 
-  showToast(`🚀 Membuka Chrome untuk ${acc.name || acc.email}...`, 'info');
-
-  try {
-    const res = await fetch(getBackendBaseUrl() + '/api/open-chrome', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: acc.email,
-        profileDir: acc.chromeProfileDir
-      })
-    });
-
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      if (data.profileDir && !acc.chromeProfileDir) {
-        acc.chromeProfileDir = data.profileDir;
-        acc.chromeProfileName = data.profileName;
-        saveData(true);
-        renderCards();
-      }
-      showToast(`🌐 Berhasil membuka Chrome: "${data.profileName || data.profileDir}"`, 'success');
-    } else if (res.status === 404 || !data.success) {
-      showToast('Pilih profil Chrome yang sesuai untuk akun ini', 'warning');
-      openChromeProfileModal(accountId);
-    } else {
-      showToast(data.error || 'Gagal membuka Chrome', 'error');
+  if (!targetDir && chromeProfilesList.length > 0) {
+    const cleanEmail = (acc.email || '').trim().toLowerCase();
+    const match = chromeProfilesList.find(p => p.email === cleanEmail);
+    if (match) {
+      targetDir = match.dir;
+      profName = match.name;
+      acc.chromeProfileDir = targetDir;
+      acc.chromeProfileName = profName;
+      saveData(true);
     }
-  } catch (err) {
-    console.warn('Gagal koneksi ke server lokal:', err);
-    showToast('⚠️ Server lokal belum berjalan! Buka buka-aplikasi.bat di komputer Anda.', 'warning');
-    if (confirm(`Server lokal belum aktif untuk meluncurkan Chrome otomatis di Windows.\n\nApakah Anda ingin membuka Google Account Switcher di tab baru untuk ${acc.email}?`)) {
-      window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(acc.email)}`, '_blank');
-    }
-  } finally {
-    if (btn) btn.classList.remove('loading');
   }
+
+  // 1. Meluncurkan Chrome fisik via protokol Windows (100% online di GitHub Pages, tanpa server lokal!)
+  if (targetDir) {
+    showToast(`🚀 Membuka profil Chrome "${profName || targetDir}" di komputer...`, 'success');
+    launchViaWindowsProtocol(targetDir);
+    return;
+  }
+
+  // 2. Jika profil belum terhubung, buka modal pemilih profil
+  openChromeProfileModal(accountId);
 }
 
 // --- Modal Pemilih Profil Chrome ---
@@ -1380,6 +1861,7 @@ window.openChromeForAccount = openChromeForAccount;
 window.openChromeProfileModal = openChromeProfileModal;
 window.closeChromeProfileModal = closeChromeProfileModal;
 window.selectChromeProfile = selectChromeProfile;
+window.openGoogleAccountChooser = openGoogleAccountChooser;
 
 // --- Inisialisasi ---
 function initApp() {
