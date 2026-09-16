@@ -381,28 +381,67 @@ body {
   width: 280px;
 }
 
-.search-box svg {
+.search-box .search-icon,
+.search-box > svg {
   position: absolute;
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-dim);
+  pointer-events: none;
 }
 
 .search-box input {
   width: 100%;
-  padding: 8px 12px 8px 36px;
+  padding: 8px 32px 8px 36px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   color: var(--text-main);
   font-size: 12px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .search-box input:focus {
   border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.15s ease;
+}
+
+.btn-clear-search.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-clear-search:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #fff;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.btn-clear-search:active {
+  transform: translateY(-50%) scale(0.92);
 }
 
 /* Accounts Cards Grid */

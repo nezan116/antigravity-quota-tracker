@@ -1106,16 +1106,56 @@ function setupEventListeners() {
     });
   });
 
-  // Search box
-  document.getElementById('search-input')?.addEventListener('input', (e) => {
+  // Search box & Clear Button
+  const searchInput = document.getElementById('search-input');
+  const btnClearSearch = document.getElementById('btn-clear-search');
+
+  function updateClearButtonVisibility() {
+    if (searchInput && btnClearSearch) {
+      if (searchInput.value.trim().length > 0) {
+        btnClearSearch.classList.add('visible');
+      } else {
+        btnClearSearch.classList.remove('visible');
+      }
+    }
+  }
+
+  searchInput?.addEventListener('input', (e) => {
     searchQuery = e.target.value;
+    updateClearButtonVisibility();
     renderCards();
+  });
+
+  searchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      clearSearch();
+    }
+  });
+
+  btnClearSearch?.addEventListener('click', (e) => {
+    e.preventDefault();
+    clearSearch();
   });
 
   // Minta izin notifikasi browser
   window.addEventListener('click', () => {
     requestNotificationPermission();
   }, { once: true });
+}
+
+// --- Fungsi Hapus Pencarian Cepat ---
+function clearSearch() {
+  const searchInput = document.getElementById('search-input');
+  const btnClear = document.getElementById('btn-clear-search');
+  if (searchInput) {
+    searchInput.value = '';
+    searchQuery = '';
+    searchInput.focus();
+  }
+  if (btnClear) {
+    btnClear.classList.remove('visible');
+  }
+  renderCards();
 }
 
 // --- Helper HTML Escape ---
@@ -1141,6 +1181,7 @@ window.quickSetDays = quickSetDays;
 window.quickAdjustHours = quickAdjustHours;
 window.quickAdjustDays = quickAdjustDays;
 window.quickAdjustMins = quickAdjustMins;
+window.clearSearch = clearSearch;
 
 // --- Inisialisasi ---
 function initApp() {
