@@ -1176,6 +1176,24 @@ function renderMetrics() {
 }
 
 // Render Kartu Akun
+
+// --- Pencocokan Otomatis Profil Google Chrome Berdasarkan Email ---
+function findChromeProfileForEmail(email) {
+  if (!email) return null;
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Cari exact match email
+  let match = chromeProfilesList.find(p => p.email && p.email.toLowerCase() === cleanEmail);
+  if (match) return match;
+
+  // 2. Cari fallback jika email diawali username
+  const prefix = cleanEmail.split('@')[0];
+  match = chromeProfilesList.find(p => p.name && p.name.toLowerCase() === prefix);
+  if (match) return match;
+
+  return null;
+}
+
 function renderCards() {
   const grid = document.getElementById('accounts-grid');
   const emptyState = document.getElementById('empty-state');
@@ -1252,52 +1270,48 @@ function renderCards() {
       progressPercent = Math.min(100, Math.max(0, Math.round((elapsed / acc.durationMs) * 100)));
     }
 
-    // Deteksi profil Google Chrome untuk akun ini
-    let profName = acc.chromeProfileName;
-    let profDir = acc.chromeProfileDir;
-    if (!profDir && chromeProfilesList.length > 0) {
-      const match = chromeProfilesList.find(p => p.email === (acc.email || '').trim().toLowerCase());
-      if (match) {
-        profDir = match.dir;
-        profName = match.name;
-      }
-    }
+    // Cocokkan otomatis profil Google Chrome HANYA yang sesuai dengan Gmail akun ini
+    const prof = findChromeProfileForEmail(acc.email);
+    const chromeLabel = prof ? `Buka Chrome (${prof.name})` : 'Buka Chrome';
 
     return `
       <div class="account-card ${cardClass}" id="card-${acc.id}">
-        <!-- Card Top: Label & Email Jelas -->
-        <div class="card-top">
-          <div class="card-account-info">
-            <div class="card-label-badge-row">
-              <span class="card-account-badge">${escapeHtml(acc.name || 'Akun')}</span>
-              ${isTopRecommended ? `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>` : ''}
-              <button class="btn-copy-email" onclick="copyEmail('${escapeHtml(acc.email)}')" title="Salin Email">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-                Salin Email
-              </button>
-              <button class="btn-open-chrome" onclick="openChromeForAccount('${acc.id}')" title="Buka Profil Google Chrome di Komputer: ${escapeHtml(profName ? `${profName} (${acc.email})` : acc.email)}">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <circle cx="12" cy="12" r="4"/>
-                  <line x1="21.17" y1="8" x2="12" y2="8"/>
-                  <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
-                  <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
-                </svg>
-                <span>Buka Chrome${profName ? ` (${escapeHtml(profName)})` : ''}</span>
-              </button>
-            </div>
-            <div class="card-email-row" style="margin-top: 4px;">
-              <span class="card-email" title="${escapeHtml(acc.email)}">${escapeHtml(acc.email)}</span>
-            </div>
+        <!-- 1. Header Bar: Nomor Akun, Tag Rekomendasi & Status Badge (Rapi Sejajar) -->
+        <div class="card-header-bar">
+          <div class="card-header-left">
+            <span class="card-account-badge">${escapeHtml(acc.name || 'Akun')}</span>
+            ${isTopRecommended ? `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>` : ''}
           </div>
-
           <div class="status-badge ${statusClass}">
             <span class="dot"></span>
             <span>${statusLabel}</span>
           </div>
+        </div>
+
+        <!-- 2. Email Address (Jelas, Tebal, & Bersih) -->
+        <div class="card-email-section">
+          <span class="card-email-text" title="${escapeHtml(acc.email)}">${escapeHtml(acc.email)}</span>
+        </div>
+
+        <!-- 3. Action Toolbar (2 Tombol Proporsional Sejajar) -->
+        <div class="card-actions-bar">
+          <button type="button" class="btn-action-copy" onclick="copyEmail('${escapeHtml(acc.email)}')" title="Salin Email">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <span>Salin Email</span>
+          </button>
+          <button type="button" class="btn-action-chrome" onclick="openChromeForAccount('${acc.id}')" title="Klik langsung: Buka profil Chrome ${escapeHtml(prof ? prof.name : acc.email)}">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="4"/>
+              <line x1="21.17" y1="8" x2="12" y2="8"/>
+              <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+              <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+            </svg>
+            <span>${escapeHtml(chromeLabel)}</span>
+          </button>
         </div>
 
         <!-- TEPAT SETELAH NAMA LABEL AKUN: KONTROL WAKTU / LIMIT -->
@@ -1417,18 +1431,9 @@ function renderCards() {
           </div>
         `}
 
-        <!-- Card Bottom -->
-        <div class="card-bottom">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-weight: 600; color: #a5b4fc;">${escapeHtml(acc.name || 'Akun')}</span>
-            <button type="button" onclick="openChromeProfileModal('${acc.id}')" title="Ganti atau tautkan profil Chrome secara manual" style="background: none; border: none; color: #818cf8; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">
-              ${profName ? '⚙️ Ubah Profil' : '🔗 Tautkan Profil'}
-            </button>
-            <span style="color: rgba(255,255,255,0.2); font-size: 10px;">•</span>
-            <button type="button" onclick="openGoogleAccountChooser('${escapeHtml(acc.email)}')" title="Buka Google Login / Account Chooser di Tab Baru" style="background: none; border: none; color: #38bdf8; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">
-              🌐 Tab Google
-            </button>
-          </div>
+        <!-- Card Footer: Bersih & Minimalis -->
+        <div class="card-footer-clean">
+          <span class="footer-acc-name">${escapeHtml(acc.name || 'Akun')}</span>
           <button class="btn-delete-card" onclick="deleteAccount('${acc.id}')" title="Hapus akun ini agar nomor urut bisa dipakai ulang">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
@@ -1639,12 +1644,7 @@ function setupEventListeners() {
     clearSearch();
   });
 
-  // Chrome Profile Modal listeners
-  document.getElementById('btn-close-profile-modal')?.addEventListener('click', closeChromeProfileModal);
-  document.getElementById('btn-cancel-profile-modal')?.addEventListener('click', closeChromeProfileModal);
-  document.getElementById('profile-search-input')?.addEventListener('input', (e) => {
-    renderProfilesListInModal(e.target.value);
-  });
+  
 
   // Minta izin notifikasi browser
   window.addEventListener('click', () => {
@@ -1679,44 +1679,7 @@ function escapeHtml(str) {
 }
 
 // --- Expose Global Functions to Window ---
-// --- Google Chrome Profile Launcher ---
-function getBackendBaseUrl() {
-  if (window.location.protocol.startsWith('http') && (window.location.port === '3333' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return '';
-  }
-  return 'http://localhost:3333';
-}
-
-async function fetchChromeProfiles() {
-  try {
-    const res = await fetch(getBackendBaseUrl() + '/api/chrome-profiles');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && Array.isArray(data.profiles)) {
-        chromeProfilesList = data.profiles;
-        let changed = false;
-        accounts.forEach(acc => {
-          if (!acc.chromeProfileDir && acc.email) {
-            const cleanEmail = acc.email.trim().toLowerCase();
-            const match = chromeProfilesList.find(p => p.email === cleanEmail);
-            if (match) {
-              acc.chromeProfileDir = match.dir;
-              acc.chromeProfileName = match.name;
-              changed = true;
-            }
-          }
-        });
-        if (changed) {
-          saveData(true);
-        }
-        renderCards();
-      }
-    }
-  } catch (err) {
-    // Server lokal belum aktif atau offline
-  }
-}
-
+// --- Google Chrome Profile Launcher (100% Online via Protokol Windows) ---
 function launchViaWindowsProtocol(profileDir) {
   const cleanDir = encodeURIComponent(profileDir);
   const iframe = document.createElement('iframe');
@@ -1726,122 +1689,22 @@ function launchViaWindowsProtocol(profileDir) {
   setTimeout(() => iframe.remove(), 2500);
 }
 
-function openGoogleAccountChooser(email) {
-  if (!email) return;
-  showToast(`🌐 Membuka Google Account Switcher untuk ${email}...`, 'info');
-  window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(email)}`, '_blank');
-}
-
-async function openChromeForAccount(accountId) {
+function openChromeForAccount(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
-  let targetDir = acc.chromeProfileDir;
-  let profName = acc.chromeProfileName;
+  const prof = findChromeProfileForEmail(acc.email);
 
-  if (!targetDir && chromeProfilesList.length > 0) {
-    const cleanEmail = (acc.email || '').trim().toLowerCase();
-    const match = chromeProfilesList.find(p => p.email === cleanEmail);
-    if (match) {
-      targetDir = match.dir;
-      profName = match.name;
-      acc.chromeProfileDir = targetDir;
-      acc.chromeProfileName = profName;
-      saveData(true);
-    }
-  }
-
-  // 1. Meluncurkan Chrome fisik via protokol Windows (100% online di GitHub Pages, tanpa server lokal!)
-  if (targetDir) {
-    showToast(`🚀 Membuka profil Chrome "${profName || targetDir}" di komputer...`, 'success');
-    launchViaWindowsProtocol(targetDir);
+  // Jika cocok dengan profil Chrome di laptop: langsung buka Chrome seketika!
+  if (prof && prof.dir) {
+    showToast(`🚀 Membuka Chrome profil "${prof.name}"...`, 'success');
+    launchViaWindowsProtocol(prof.dir);
     return;
   }
 
-  // 2. Jika profil belum terhubung, buka modal pemilih profil
-  openChromeProfileModal(accountId);
-}
-
-// --- Modal Pemilih Profil Chrome ---
-function openChromeProfileModal(accountId) {
-  activeProfileTargetAccountId = accountId;
-  const acc = accounts.find(a => a.id === accountId);
-  const modal = document.getElementById('chrome-profile-modal');
-  const desc = document.getElementById('profile-modal-desc');
-  const searchInput = document.getElementById('profile-search-input');
-
-  if (desc && acc) {
-    desc.innerHTML = `Pilih profil Google Chrome untuk akun: <strong>${escapeHtml(acc.name || acc.email)}</strong> (${escapeHtml(acc.email)})`;
-  }
-  if (searchInput) searchInput.value = '';
-
-  renderProfilesListInModal();
-  if (modal) modal.classList.remove('hidden');
-}
-
-function closeChromeProfileModal() {
-  const modal = document.getElementById('chrome-profile-modal');
-  if (modal) modal.classList.add('hidden');
-  activeProfileTargetAccountId = null;
-}
-
-function renderProfilesListInModal(filterQuery = '') {
-  const container = document.getElementById('profiles-list-container');
-  if (!container) return;
-
-  const q = filterQuery.trim().toLowerCase();
-  const filtered = chromeProfilesList.filter(p => {
-    if (!q) return true;
-    return (p.name || '').toLowerCase().includes(q) ||
-           (p.email || '').toLowerCase().includes(q) ||
-           (p.dir || '').toLowerCase().includes(q);
-  });
-
-  if (filtered.length === 0) {
-    container.innerHTML = `
-      <div style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
-        ${chromeProfilesList.length === 0 ? 'Sedang memuat profil Chrome atau server lokal belum berjalan...' : 'Tidak ada profil Chrome yang cocok dengan pencarian.'}
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = filtered.map(p => {
-    return `
-      <button type="button" class="profile-item-btn" onclick="selectChromeProfile('${escapeHtml(p.dir)}')">
-        <div class="profile-item-left">
-          <div class="profile-item-name">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#60a5fa" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <circle cx="12" cy="12" r="4"/>
-              <line x1="21.17" y1="8" x2="12" y2="8"/>
-              <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
-              <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
-            </svg>
-            ${escapeHtml(p.name)}
-          </div>
-          <div class="profile-item-email">${escapeHtml(p.email || 'Tidak ada email terikat')}</div>
-        </div>
-        <span class="profile-item-dir">${escapeHtml(p.dir)}</span>
-      </button>
-    `;
-  }).join('');
-}
-
-function selectChromeProfile(profileDir) {
-  if (!activeProfileTargetAccountId) return;
-  const acc = accounts.find(a => a.id === activeProfileTargetAccountId);
-  const prof = chromeProfilesList.find(p => p.dir === profileDir);
-
-  if (acc && prof) {
-    acc.chromeProfileDir = prof.dir;
-    acc.chromeProfileName = prof.name;
-    saveData(true);
-    closeChromeProfileModal();
-    renderCards();
-    showToast(`✅ Profil "${prof.name}" berhasil dihubungkan ke ${acc.name || acc.email}!`, 'success');
-    openChromeForAccount(acc.id);
-  }
+  // Jika belum ada profil Chrome lokal untuk email ini: langsung buka Google Account Switcher di tab baru
+  showToast(`🌐 Membuka Google Account Switcher untuk ${acc.email}...`, 'info');
+  window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(acc.email)}`, '_blank');
 }
 
 // --- Expose Global Functions to Window ---
@@ -1858,10 +1721,6 @@ window.quickAdjustDays = quickAdjustDays;
 window.quickAdjustMins = quickAdjustMins;
 window.clearSearch = clearSearch;
 window.openChromeForAccount = openChromeForAccount;
-window.openChromeProfileModal = openChromeProfileModal;
-window.closeChromeProfileModal = closeChromeProfileModal;
-window.selectChromeProfile = selectChromeProfile;
-window.openGoogleAccountChooser = openGoogleAccountChooser;
 
 // --- Inisialisasi ---
 function initApp() {

@@ -486,168 +486,19 @@ body {
   border-top: 4px solid var(--status-weekly);
 }
 
-.card-top {
+/* --- TATA LETAK KARTU RAPI, MODERN & MINIMALIS --- */
+.card-header-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.card-account-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
-
-.card-email-row {
-  display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
-.card-email {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  line-height: 1.35;
-}
-
-.btn-copy-email {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--border-color);
-  color: #c7d2fe;
-  cursor: pointer;
-  padding: 3px 8px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  transition: all 0.15s;
-}
-
-.btn-copy-email:hover {
-  background: rgba(99, 102, 241, 0.25);
-  border-color: rgba(99, 102, 241, 0.5);
-  color: #fff;
-}
-
-/* Tombol Buka Profil Chrome Otomatis */
-.btn-open-chrome {
-  background: linear-gradient(135deg, rgba(66, 133, 244, 0.15), rgba(52, 168, 83, 0.15));
-  border: 1px solid rgba(96, 165, 250, 0.45);
-  color: #93c5fd;
-  cursor: pointer;
-  padding: 3px 9px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  letter-spacing: 0.01em;
-}
-
-.btn-open-chrome:hover {
-  background: linear-gradient(135deg, rgba(66, 133, 244, 0.35), rgba(52, 168, 83, 0.3));
-  border-color: rgba(147, 197, 253, 0.85);
-  color: #ffffff;
-  box-shadow: 0 0 14px rgba(66, 133, 244, 0.45);
-  transform: translateY(-1px);
-}
-
-.btn-open-chrome:active {
-  transform: translateY(0);
-}
-
-.btn-open-chrome svg {
-  color: #60a5fa;
-  flex-shrink: 0;
-}
-
-.btn-open-chrome.loading {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-/* Modal Pemilih Profil Chrome */
-.profiles-list-container {
-  max-height: 280px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-right: 4px;
-}
-
-.profile-item-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--text-main);
-  text-align: left;
-  transition: all 0.15s ease;
-  width: 100%;
-}
-
-.profile-item-btn:hover {
-  background: rgba(99, 102, 241, 0.18);
-  border-color: var(--primary-color);
-  transform: translateX(2px);
-}
-
-.profile-item-left {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.profile-item-name {
-  font-weight: 700;
-  font-size: 13px;
-  color: #fff;
+.card-header-left {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.profile-item-email {
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-.profile-item-dir {
-  font-size: 11px;
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.15);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #c7d2fe;
-}
-
-.card-label-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -655,11 +506,11 @@ body {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3));
   border: 1px solid rgba(129, 140, 248, 0.45);
   color: #e0e7ff;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 6px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   display: inline-flex;
   align-items: center;
 }
@@ -688,6 +539,109 @@ body {
 .account-card.is-top-recommended {
   border-color: rgba(16, 185, 129, 0.55);
   box-shadow: 0 8px 32px rgba(16, 185, 129, 0.15), 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Card Email Box: Bersih, Rapi & Elegan */
+.card-email-section {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.card-email-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.35;
+  display: block;
+}
+
+/* Action Toolbar: 2 tombol sejajar dan proporsional */
+.card-actions-bar {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.btn-action-copy {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #c7d2fe;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-action-copy:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(129, 140, 248, 0.5);
+  color: #ffffff;
+}
+
+.btn-action-chrome {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(16, 185, 129, 0.18));
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  color: #93c5fd;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-action-chrome:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(16, 185, 129, 0.3));
+  border-color: rgba(147, 197, 253, 0.85);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-action-chrome:active {
+  transform: translateY(0);
+}
+
+.btn-action-chrome svg {
+  color: #60a5fa;
+  flex-shrink: 0;
+}
+
+/* Card Footer: Bersih & Minimalis */
+.card-footer-clean {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footer-acc-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #818cf8;
 }
 
 /* Bagian Atur Akhir Limit Saat Di-klik (Langsung sesuaikan akhir 5 jam / 7 hari tanpa ketik) */
