@@ -644,56 +644,62 @@ body {
   color: #818cf8;
 }
 
-/* Bagian Atur Akhir Limit Saat Di-klik (Langsung sesuaikan akhir 5 jam / 7 hari tanpa ketik) */
+/* Bagian Atur Akhir Limit Saat Di-klik (Grid 4 Kolom Simetris & Rapi) */
 .click-adjust-section {
-  background: rgba(0, 0, 0, 0.28);
-  border-radius: 10px;
-  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 9px;
+  padding: 8px 9px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .click-adjust-section.sprint {
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  background: rgba(245, 158, 11, 0.04);
 }
 
 .click-adjust-section.weekly {
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.04);
 }
 
 .click-adjust-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #94a3b8;
+  letter-spacing: 0.02em;
 }
 
 .click-chips-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  width: 100%;
 }
 
 .chip-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #e2e8f0;
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 5.5px 1px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .chip-btn:hover {
@@ -805,39 +811,7 @@ body {
   text-decoration: underline;
 }
 
-.card-cancel-limit-bar {
-  margin-top: 10px;
-  display: flex;
-}
 
-.btn-cancel-limit {
-  width: 100%;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.45);
-  color: #6ee7b7;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  transition: all 0.2s ease;
-}
-
-.btn-cancel-limit:hover {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: rgba(52, 211, 153, 0.8);
-  color: #ffffff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-}
-
-.btn-cancel-limit:active {
-  transform: translateY(1px);
-}
 
 /* Status Badge */
 .status-badge {
@@ -886,12 +860,12 @@ body {
   50% { opacity: 0.35; transform: scale(0.8); }
 }
 
-/* Countdown Box */
+/* Countdown Box: Rapi, Modern & Proporsional */
 .countdown-box {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 11px 13px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -902,35 +876,68 @@ body {
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
 }
 
 .countdown-display {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #fff;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Digital Segmented Countdown: Tidak Akan Pernah Pecah Baris */
+.cd-box-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cd-col {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  text-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
+  gap: 2.5px;
 }
 
-.countdown-display .day-part {
-  color: #fca5a5;
-  font-size: 16px;
-  margin-right: 4px;
+.cd-val {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
 }
 
-.account-card.status-sprint .countdown-display {
+.account-card.status-sprint .cd-val {
   color: #fde68a;
-  text-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
 }
 
-.account-card.status-weekly .countdown-display {
+.account-card.status-weekly .cd-val {
   color: #fca5a5;
-  text-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+}
+
+.cd-txt {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cd-divider {
+  color: rgba(255, 255, 255, 0.22);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  margin: 0 1px;
 }
 
 .reset-date-info {

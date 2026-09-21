@@ -1013,16 +1013,45 @@ function getRemainingTime(resetIsoString) {
 }
 
 function formatCountdownDisplay(rem) {
-  if (!rem || rem.expired) return '00 Jam : 00 Menit : 00 Detik';
+  if (!rem || rem.expired) {
+    return `
+      <div class="cd-box-grid no-days">
+        <div class="cd-col"><span class="cd-val">00</span><span class="cd-txt">Jam</span></div>
+        <span class="cd-divider">:</span>
+        <div class="cd-col"><span class="cd-val">00</span><span class="cd-txt">Mnt</span></div>
+        <span class="cd-divider">:</span>
+        <div class="cd-col"><span class="cd-val">00</span><span class="cd-txt">Dtk</span></div>
+      </div>
+    `;
+  }
   
   const hStr = String(rem.hours).padStart(2, '0');
   const mStr = String(rem.minutes).padStart(2, '0');
   const sStr = String(rem.seconds).padStart(2, '0');
 
   if (rem.days > 0) {
-    return `<span class="day-part">${rem.days} Hari</span> ${hStr} Jam : ${mStr} Menit : ${sStr} Detik`;
+    return `
+      <div class="cd-box-grid">
+        <div class="cd-col"><span class="cd-val">${rem.days}</span><span class="cd-txt">Hari</span></div>
+        <span class="cd-divider">:</span>
+        <div class="cd-col"><span class="cd-val">${hStr}</span><span class="cd-txt">Jam</span></div>
+        <span class="cd-divider">:</span>
+        <div class="cd-col"><span class="cd-val">${mStr}</span><span class="cd-txt">Mnt</span></div>
+        <span class="cd-divider">:</span>
+        <div class="cd-col"><span class="cd-val">${sStr}</span><span class="cd-txt">Dtk</span></div>
+      </div>
+    `;
   }
-  return `${hStr} Jam : ${mStr} Menit : ${sStr} Detik`;
+
+  return `
+    <div class="cd-box-grid no-days">
+      <div class="cd-col"><span class="cd-val">${hStr}</span><span class="cd-txt">Jam</span></div>
+      <span class="cd-divider">:</span>
+      <div class="cd-col"><span class="cd-val">${mStr}</span><span class="cd-txt">Mnt</span></div>
+      <span class="cd-divider">:</span>
+      <div class="cd-col"><span class="cd-val">${sStr}</span><span class="cd-txt">Dtk</span></div>
+    </div>
+  `;
 }
 
 function formatCountdownTextSimple(rem) {
@@ -1794,27 +1823,25 @@ function renderCards() {
               <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
 
-            <!-- Penyesuaian Akhir 5 Jam: Didominasi Tombol Pengurangan (Minus) -->
+            <!-- Penyesuaian Akhir 5 Jam (Grid 4 Kolom Rapi & Simetris) -->
             <div class="click-adjust-section sprint">
               <div class="click-adjust-header">
-                <span>⚡ Kurangi Waktu / Set Sisa 5 Jam:</span>
+                <span>⚡ Kurangi Waktu / Set Sisa:</span>
               </div>
               <div class="click-chips-grid">
-                <!-- Tombol Pengurangan Cepat (Utama) -->
                 <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -2)" title="Kurangi 2 Jam">-2 Jam</button>
                 <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
                 <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -30)" title="Kurangi 30 Menit">-30 Mnt</button>
                 <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -15)" title="Kurangi 15 Menit">-15 Mnt</button>
-                <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -5)" title="Kurangi 5 Menit">-5 Mnt</button>
-                <!-- Preset Langsung Sisa Waktu -->
+
                 <button class="chip-btn highlight" onclick="quickSetHours('${acc.id}', 5)" title="Reset ke 5 Jam penuh">⚡ 5 Jam</button>
                 <button class="chip-btn" onclick="quickSetHours('${acc.id}', 4)" title="Set sisa 4 Jam">4 Jam</button>
                 <button class="chip-btn" onclick="quickSetHours('${acc.id}', 3)" title="Set sisa 3 Jam">3 Jam</button>
                 <button class="chip-btn" onclick="quickSetHours('${acc.id}', 2)" title="Set sisa 2 Jam">2 Jam</button>
+
                 <button class="chip-btn" onclick="quickSetHours('${acc.id}', 1)" title="Set sisa 1 Jam">1 Jam</button>
                 <button class="chip-btn" onclick="quickSetMinutes('${acc.id}', 30)" title="Set sisa 30 Menit">30 Mnt</button>
-                <!-- Koreksi Tambah (Minimal) -->
-                <button class="chip-btn plus" onclick="quickAdjustMins('${acc.id}', 15)" title="Tambah 15 Menit">+15 Mnt</button>
+                <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -5)" title="Kurangi 5 Menit">-5 Mnt</button>
                 <button class="chip-btn plus" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
               </div>
             </div>
@@ -1822,15 +1849,6 @@ function renderCards() {
           <div class="card-switch-limit">
             <button class="btn-switch-limit" onclick="setWeeklyLimit('${acc.id}')" title="Ganti ke Limit Mingguan (7 Hari)">
               🛑 Ganti ke Limit Mingguan (7 Hari) &rarr;
-            </button>
-          </div>
-          <div class="card-cancel-limit-bar">
-            <button type="button" class="btn-cancel-limit" onclick="resetToReady('${acc.id}')" title="Salah klik? Batalkan limit dan kembalikan akun ini ke status Siap Pakai">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="1 4 1 10 7 10"/>
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-              </svg>
-              <span>Batalkan Limit (Kembalikan ke Siap Pakai)</span>
             </button>
           </div>
         ` : `
@@ -1854,46 +1872,37 @@ function renderCards() {
               <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
 
-            <!-- Penyesuaian Akhir 7 Hari: Didominasi Tombol Pengurangan (Minus) -->
+            <!-- Penyesuaian Akhir 7 Hari (Grid 4 Kolom Rapi & Simetris) -->
             <div class="click-adjust-section weekly">
               <div class="click-adjust-header">
-                <span>🛑 Kurangi Waktu / Set Sisa 7 Hari:</span>
+                <span>🛑 Kurangi Waktu / Set Sisa:</span>
               </div>
               <div class="click-chips-grid">
-                <!-- Tombol Pengurangan Cepat (Utama) -->
                 <button class="chip-btn minus" onclick="quickAdjustDays('${acc.id}', -2)" title="Kurangi 2 Hari">-2 Hari</button>
                 <button class="chip-btn minus" onclick="quickAdjustDays('${acc.id}', -1)" title="Kurangi 1 Hari">-1 Hari</button>
                 <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -12)" title="Kurangi 12 Jam">-12 Jam</button>
                 <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -6)" title="Kurangi 6 Jam">-6 Jam</button>
+
                 <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
                 <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -30)" title="Kurangi 30 Menit">-30 Mnt</button>
-                <!-- Preset Langsung Sisa Waktu -->
+                <button class="chip-btn plus" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
+                <button class="chip-btn plus" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
+
                 <button class="chip-btn highlight" onclick="quickSetDays('${acc.id}', 7)" title="Reset ke 7 Hari penuh">🛑 7 Hari</button>
                 <button class="chip-btn" onclick="quickSetDays('${acc.id}', 6)" title="Set sisa 6 Hari">6 Hari</button>
                 <button class="chip-btn" onclick="quickSetDays('${acc.id}', 5)" title="Set sisa 5 Hari">5 Hari</button>
                 <button class="chip-btn" onclick="quickSetDays('${acc.id}', 4)" title="Set sisa 4 Hari">4 Hari</button>
+
                 <button class="chip-btn" onclick="quickSetDays('${acc.id}', 3)" title="Set sisa 3 Hari">3 Hari</button>
                 <button class="chip-btn" onclick="quickSetDays('${acc.id}', 2)" title="Set sisa 2 Hari">2 Hari</button>
                 <button class="chip-btn" onclick="quickSetDays('${acc.id}', 1)" title="Set sisa 1 Hari">1 Hari</button>
                 <button class="chip-btn" onclick="quickSetHours('${acc.id}', 12)" title="Set sisa 12 Jam">12 Jam</button>
-                <!-- Koreksi Tambah (Minimal) -->
-                <button class="chip-btn plus" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
-                <button class="chip-btn plus" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
               </div>
             </div>
           </div>
           <div class="card-switch-limit">
             <button class="btn-switch-limit" onclick="setSprintLimit('${acc.id}')" title="Ganti ke Limit 5 Jam">
               ⚡ Ganti ke Limit 5 Jam &rarr;
-            </button>
-          </div>
-          <div class="card-cancel-limit-bar">
-            <button type="button" class="btn-cancel-limit" onclick="resetToReady('${acc.id}')" title="Salah klik? Batalkan limit dan kembalikan akun ini ke status Siap Pakai">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="1 4 1 10 7 10"/>
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-              </svg>
-              <span>Batalkan Limit (Kembalikan ke Siap Pakai)</span>
             </button>
           </div>
         `}
