@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Antigravity Quota & Token Reset Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=13">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
@@ -30,6 +30,13 @@
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
           </svg>
           <span class="btn-text">Suara Notifikasi</span>
+        </button>
+        <button id="btn-history-menu" class="btn btn-secondary" title="Riwayat Perubahan & Batalkan (Undo)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span class="btn-text">Riwayat</span>
         </button>
         <button id="btn-backup-menu" class="btn btn-secondary" title="Backup / Restore JSON">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -170,9 +177,29 @@
     </div>
   </div>
 
+  <!-- Modal: Riwayat Perubahan & Undo -->
+  <div id="history-modal" class="modal-overlay hidden">
+    <div class="modal-container modal-history-container">
+      <div class="modal-header">
+        <h2>Riwayat Perubahan & Undo</h2>
+        <button class="btn-close-modal" id="btn-close-history-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Semua perubahan status limit dan pengaturan waktu tersimpan di sini. Anda dapat membatalkan (Undo) perubahan yang salah klik kapan saja.</p>
+        <div id="history-list" class="history-list">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btn-clear-history" style="margin-right: auto; color: #f87171;">Hapus Riwayat</button>
+        <button type="button" class="btn btn-secondary" id="btn-close-history">Tutup</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

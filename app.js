@@ -7,8 +7,10 @@
 
 const STORAGE_KEY = 'antigravity_accounts_v2';
 const SOUND_KEY = 'antigravity_sound_enabled';
+const HISTORY_KEY = 'antigravity_history_v1';
 
 let accounts = [];
+let actionHistory = [];
 let soundEnabled = true;
 let currentFilter = 'recommended';
 let searchQuery = '';
@@ -672,6 +674,244 @@ function showToast(message, type = 'info') {
   }, 3500);
 }
 
+
+// --- Toast Alert dengan Tombol Undo ---
+function showToastWithUndo(message, accountId, type = 'warning') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  let icon = '⚠️';
+  if (type === 'warning') icon = '🛑';
+  if (type === 'info') icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+
+  toast.innerHTML = `
+    <span>${icon}</span>
+    <span style="flex: 1; min-width: 0; word-break: break-word;">${message}</span>
+    <button type="button" class="toast-undo-btn" onclick="resetToReady('${accountId}'); this.closest('.toast').remove();" title="Batalkan perubahan ini">
+      ↩️ Batalkan (Undo)
+    </button>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      toast.style.transition = 'all 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 7000);
+}
+
+// --- History & Undo Management ---
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    actionHistory = raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    actionHistory = [];
+  }
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(actionHistory));
+  } catch (e) {
+    console.warn('Failed to save history to localStorage:', e);
+  }
+}
+
+function addHistoryEntry(entry) {
+  const item = {
+    id: 'h-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+    time: new Date().toISOString(),
+    ...entry
+  };
+  actionHistory.unshift(item);
+  if (actionHistory.length > 50) {
+    actionHistory = actionHistory.slice(0, 50);
+  }
+  saveHistory();
+}
+
+function clearHistoryLog() {
+  if (confirm('Yakin ingin menghapus semua riwayat perubahan?')) {
+    actionHistory = [];
+    saveHistory();
+    renderHistoryModal();
+    showToast('Riwayat perubahan berhasil dibersihkan', 'info');
+  }
+}
+
+function undoHistoryAction(historyId) {
+  const entryIndex = actionHistory.findIndex(h => h.id === historyId);
+  if (entryIndex === -1) return;
+  const entry = actionHistory[entryIndex];
+
+  if (!entry.prevState && !entry.deletedAccount) {
+    showToast('Aksi ini tidak dapat dibatalkan secara otomatis', 'warning');
+    return;
+  }
+
+  // Jika aksi adalah hapus akun: pulihkan akun tersebut
+  if (entry.actionType === 'delete_account' && entry.deletedAccount) {
+    accounts.push(entry.deletedAccount);
+    sortAccounts();
+    actionHistory.splice(entryIndex, 1);
+    saveHistory();
+    saveData();
+    renderAll();
+    renderHistoryModal();
+    showToast(`✅ Akun "${entry.accountName || entry.accountEmail}" berhasil dipulihkan!`, 'success');
+    return;
+  }
+
+  // Cari akun terkait
+  const acc = accounts.find(a => a.id === entry.accountId || (entry.accountEmail && a.email.toLowerCase() === entry.accountEmail.toLowerCase()));
+
+  if (!acc) {
+    showToast('Akun terkait tidak ditemukan dalam daftar!', 'error');
+    return;
+  }
+
+  // Restore status sebelumnya
+  acc.status = entry.prevState.status || 'ready';
+  acc.lockedAt = entry.prevState.lockedAt || null;
+  acc.resetAt = entry.prevState.resetAt || null;
+  acc.durationMs = entry.prevState.durationMs || 0;
+  if (entry.prevState.lastUsedAt !== undefined) {
+    acc.lastUsedAt = entry.prevState.lastUsedAt;
+  }
+  acc.notified = false;
+
+  // Hapus entri history ini setelah di-undo
+  actionHistory.splice(entryIndex, 1);
+  saveHistory();
+
+  saveData();
+  renderAll();
+  renderHistoryModal();
+
+  showToast(`✅ Perubahan untuk "${acc.name || acc.email}" berhasil dibatalkan (Undo)!`, 'success');
+}
+
+function renderHistoryModal() {
+  const container = document.getElementById('history-list');
+  if (!container) return;
+
+  if (actionHistory.length === 0) {
+    container.innerHTML = `
+      <div class="history-empty">
+        <span>Belum ada riwayat perubahan limit atau status.</span>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = actionHistory.map(item => {
+    let icon = '⚡';
+    let badgeClass = 'sprint';
+    let badgeLabel = 'Limit 5 Jam';
+
+    if (item.actionType === 'weekly_limit') {
+      icon = '🛑';
+      badgeClass = 'weekly';
+      badgeLabel = 'Limit 7 Hari';
+    } else if (item.actionType === 'reset_ready') {
+      icon = '🟢';
+      badgeClass = 'ready';
+      badgeLabel = 'Siap Pakai';
+    } else if (item.actionType === 'adjust_time') {
+      icon = '⚙️';
+      badgeClass = 'sprint';
+      badgeLabel = 'Atur Waktu';
+    } else if (item.actionType === 'delete_account') {
+      icon = '🗑️';
+      badgeClass = 'weekly';
+      badgeLabel = 'Hapus Akun';
+    }
+
+    const timeStr = formatRelativeOrDateTime(item.time);
+    const canUndo = !!(item.prevState || item.deletedAccount);
+
+    return `
+      <div class="history-item">
+        <div class="history-item-left">
+          <div class="history-icon">${icon}</div>
+          <div class="history-item-info">
+            <div class="history-item-title">
+              <span>${escapeHtml(item.accountName || item.accountEmail || 'Akun')}</span>
+              <span class="history-badge ${badgeClass}">${badgeLabel}</span>
+            </div>
+            <div class="history-item-desc" title="${escapeHtml(item.desc || '')}">
+              ${escapeHtml(item.desc || item.accountEmail || '')}
+            </div>
+            <div class="history-item-time">${timeStr}</div>
+          </div>
+        </div>
+        ${canUndo ? `
+          <button type="button" class="btn-history-undo" onclick="undoHistoryAction('${item.id}')" title="Kembalikan ke status sebelum perubahan ini">
+            ↩️ Undo
+          </button>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function formatRelativeOrDateTime(isoString) {
+  if (!isoString) return '-';
+  const d = new Date(isoString);
+  const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+
+  if (diffSec < 45) return 'Baru saja';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} menit yang lalu`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} jam yang lalu`;
+
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  const day = d.getDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  return `${day} ${months[d.getMonth()]} pukul ${hours}:${mins}`;
+}
+
+// Kembalikan Akun ke Status Siap Pakai (Bisa Digunakan)
+function resetToReady(accountId) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
+
+  acc.status = 'ready';
+  acc.lockedAt = null;
+  acc.resetAt = null;
+  acc.durationMs = 0;
+  acc.notified = false;
+
+  addHistoryEntry({
+    actionType: 'reset_ready',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: 'Limit dibatalkan, akun kembali ke status Siap Pakai',
+    prevState
+  });
+
+  saveData();
+  renderAll();
+  showToast(`🟢 Akun "${acc.name || acc.email}" berhasil dikembalikan ke Siap Pakai!`, 'success');
+}
+
 // --- Storage & Database Management ---
 // Mendukung dual-storage: Real database (database.json via server) + browser LocalStorage
 async function loadData() {
@@ -716,6 +956,7 @@ async function loadData() {
   updateSoundButtonUI();
   updateLabelSuggestion();
   fetchChromeProfiles();
+  loadHistory();
 }
 
 function saveData(syncBackend = true) {
@@ -867,6 +1108,14 @@ function setSprintLimit(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
+
   const now = new Date();
   const reset = new Date(now.getTime() + 5 * 3600 * 1000); // Tepat 5 Jam ke depan
 
@@ -878,15 +1127,32 @@ function setSprintLimit(accountId) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
+  addHistoryEntry({
+    actionType: 'sprint_limit',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Limit 5 jam hingga ${formatDateTime(reset.toISOString())}`,
+    prevState
+  });
+
   saveData();
   renderAll();
-  showToast(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}". Reset pada ${formatDateTime(reset.toISOString())}`, 'warning');
+  showToastWithUndo(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
 }
 
 // 2. Kena Limit Mingguan
 function setWeeklyLimit(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
 
   const now = new Date();
   const reset = new Date(now.getTime() + 7 * 24 * 3600 * 1000); // Tepat 7 Hari ke depan
@@ -899,9 +1165,18 @@ function setWeeklyLimit(accountId) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
+  addHistoryEntry({
+    actionType: 'weekly_limit',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Limit mingguan 7 hari hingga ${formatDateTime(reset.toISOString())}`,
+    prevState
+  });
+
   saveData();
   renderAll();
-  showToast(`🔴 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}". Reset pada ${formatDateTime(reset.toISOString())}`, 'warning');
+  showToastWithUndo(`🛑 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
 }
 
 // 3. Hapus Akun (Nomor urut otomatis kosong dan siap dipakai ulang!)
@@ -911,7 +1186,18 @@ function deleteAccount(accountId) {
 
   const displayName = acc.name ? `${acc.name} (${acc.email})` : acc.email;
   if (confirm(`Yakin ingin menghapus akun "${displayName}"?`)) {
+    const deletedAcc = { ...acc };
     accounts = accounts.filter(a => a.id !== accountId);
+
+    addHistoryEntry({
+      actionType: 'delete_account',
+      accountId: deletedAcc.id,
+      accountName: deletedAcc.name,
+      accountEmail: deletedAcc.email,
+      desc: `Akun "${displayName}" dihapus`,
+      deletedAccount: deletedAcc
+    });
+
     saveData();
     renderAll();
     updateLabelSuggestion();
@@ -992,6 +1278,14 @@ function quickSetHours(accountId, targetHours) {
   acc.notified = false;
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
+
+  addHistoryEntry({
+    actionType: 'adjust_time',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`
+  });
 
   saveData();
   renderAll();
@@ -1383,6 +1677,15 @@ function renderCards() {
               🛑 Ganti ke Limit Mingguan (7 Hari) &rarr;
             </button>
           </div>
+          <div class="card-cancel-limit-bar">
+            <button type="button" class="btn-cancel-limit" onclick="resetToReady('${acc.id}')" title="Salah klik? Batalkan limit dan kembalikan akun ini ke status Siap Pakai">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+              <span>Batalkan Limit (Kembalikan ke Siap Pakai)</span>
+            </button>
+          </div>
         ` : `
           <!-- Kondisi Limit Mingguan 7 Hari: Countdown + Klik Langsung Sesuaikan Akhir 7 Hari -->
           <div class="countdown-box">
@@ -1427,6 +1730,15 @@ function renderCards() {
           <div class="card-switch-limit">
             <button class="btn-switch-limit" onclick="setSprintLimit('${acc.id}')" title="Ganti ke Limit 5 Jam">
               ⚡ Ganti ke Limit 5 Jam &rarr;
+            </button>
+          </div>
+          <div class="card-cancel-limit-bar">
+            <button type="button" class="btn-cancel-limit" onclick="resetToReady('${acc.id}')" title="Salah klik? Batalkan limit dan kembalikan akun ini ke status Siap Pakai">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+              <span>Batalkan Limit (Kembalikan ke Siap Pakai)</span>
             </button>
           </div>
         `}
@@ -1586,9 +1898,28 @@ function setupBackupModal() {
   });
 }
 
+
+// --- Setup History Modal ---
+function setupHistoryModal() {
+  const btnHistory = document.getElementById('btn-history-menu');
+  const modal = document.getElementById('history-modal');
+  const btnClose = document.getElementById('btn-close-history');
+  const btnCloseX = document.getElementById('btn-close-history-modal');
+  const btnClear = document.getElementById('btn-clear-history');
+
+  btnHistory?.addEventListener('click', () => {
+    renderHistoryModal();
+    modal?.classList.remove('hidden');
+  });
+  btnClose?.addEventListener('click', () => modal?.classList.add('hidden'));
+  btnCloseX?.addEventListener('click', () => modal?.classList.add('hidden'));
+  btnClear?.addEventListener('click', clearHistoryLog);
+}
+
 // --- Setup Event Listeners ---
 function setupEventListeners() {
   setupBackupModal();
+  setupHistoryModal();
 
   // Sound toggle
   document.getElementById('btn-toggle-sound')?.addEventListener('click', () => {
@@ -1721,6 +2052,9 @@ window.quickAdjustDays = quickAdjustDays;
 window.quickAdjustMins = quickAdjustMins;
 window.clearSearch = clearSearch;
 window.openChromeForAccount = openChromeForAccount;
+window.resetToReady = resetToReady;
+window.undoHistoryAction = undoHistoryAction;
+window.clearHistoryLog = clearHistoryLog;
 
 // --- Inisialisasi ---
 function initApp() {
