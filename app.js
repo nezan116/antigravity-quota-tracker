@@ -1101,6 +1101,32 @@ function handleSaveAccount(e) {
   showToast(`✅ Akun "${name}" (${email}) berhasil disimpan!`, 'success');
 }
 
+
+// --- Sistem Penguncian Urutan Kartu (Freeze 1 Menit saat Kurangi Jam/Menyesuaikan Waktu) ---
+let sortFrozenUntil = 0;
+let frozenOrderIds = [];
+let sortUnfreezeTimer = null;
+
+function triggerSortFreeze() {
+  sortFrozenUntil = Date.now() + 60000; // Kunci urutan selama 60 detik (1 menit)
+
+  // Ambil urutan kartu yang sedang tampil di layar saat ini
+  const cards = document.querySelectorAll('.account-card');
+  if (cards.length > 0) {
+    frozenOrderIds = Array.from(cards).map(c => c.id.replace('card-', ''));
+  } else if (frozenOrderIds.length === 0) {
+    frozenOrderIds = accounts.map(a => a.id);
+  }
+
+  if (sortUnfreezeTimer) clearTimeout(sortUnfreezeTimer);
+  sortUnfreezeTimer = setTimeout(() => {
+    sortFrozenUntil = 0;
+    frozenOrderIds = [];
+    renderCards();
+    showToast('🔄 Posisi kartu diperbarui ke urutan terbaru', 'info');
+  }, 60000);
+}
+
 // --- Actions on Accounts ---
 
 // 1. Kena Limit 5 Jam
@@ -1287,9 +1313,50 @@ function quickSetHours(accountId, targetHours) {
     desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`
   });
 
+  triggerSortFreeze();
   saveData();
   renderAll();
   showToast(`⚡ Hitung mundur disetel ke ${targetHours} Jam untuk "${acc.name || acc.email}"`, 'warning');
+}
+
+
+// Pintasan langsung set menit tertentu (misal: 30 Menit)
+function quickSetMinutes(accountId, targetMinutes) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
+
+  const now = new Date();
+  const totalMs = targetMinutes * 60 * 1000;
+  const reset = new Date(now.getTime() + totalMs);
+
+  acc.status = 'sprint_cooldown';
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = totalMs;
+  acc.notified = false;
+  acc.lastUsedAt = now.toISOString();
+
+  addHistoryEntry({
+    actionType: 'adjust_time',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Waktu disetel ${targetMinutes} Menit (hingga ${formatDateTime(reset.toISOString())})`,
+    prevState
+  });
+
+  triggerSortFreeze();
+  saveData();
+  renderAll();
+  showToast(`⚡ Hitung mundur disetel ke ${targetMinutes} Menit untuk "${acc.name || acc.email}"`, 'warning');
 }
 
 // Pintasan langsung set hari tertentu (misal: 7 Hari)
@@ -1309,15 +1376,24 @@ function quickSetDays(accountId, targetDays) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
+  triggerSortFreeze();
   saveData();
   renderAll();
   showToast(`🛑 Hitung mundur disetel ke ${targetDays} Hari untuk "${acc.name || acc.email}"`, 'warning');
 }
 
-// Tambah / Kurang Jam Cepat (+1 Jam, -1 Jam)
+// Tambah / Kurang Jam Cepat (+1 Jam, -1 Jam, -2 Jam, dsb.)
 function quickAdjustHours(accountId, deltaHours) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
 
   let currentMs = 0;
   if (acc.resetAt) {
@@ -1334,6 +1410,7 @@ function quickAdjustHours(accountId, deltaHours) {
     acc.resetAt = null;
     acc.durationMs = 0;
     acc.notified = false;
+    triggerSortFreeze();
     saveData();
     renderAll();
     showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
@@ -1354,15 +1431,33 @@ function quickAdjustHours(accountId, deltaHours) {
     acc.status = 'sprint_cooldown';
   }
 
+  addHistoryEntry({
+    actionType: 'adjust_time',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Waktu disesuaikan ${deltaHours > 0 ? '+' : ''}${deltaHours} Jam`,
+    prevState
+  });
+
+  triggerSortFreeze();
   saveData();
   renderAll();
-  showToast(`⏱️ Waktu disesuaikan ${deltaHours > 0 ? '+' : ''}${deltaHours} Jam untuk "${acc.name || acc.email}"`, 'info');
+  showToast(`⏱️ Waktu dikurangi/ditambah ${deltaHours > 0 ? '+' : ''}${deltaHours} Jam untuk "${acc.name || acc.email}"`, 'info');
 }
 
-// Tambah / Kurang Hari Cepat (+1 Hari, -1 Hari)
+// Tambah / Kurang Hari Cepat (+1 Hari, -1 Hari, -2 Hari)
 function quickAdjustDays(accountId, deltaDays) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
 
   let currentMs = 0;
   if (acc.resetAt) {
@@ -1379,6 +1474,7 @@ function quickAdjustDays(accountId, deltaDays) {
     acc.resetAt = null;
     acc.durationMs = 0;
     acc.notified = false;
+    triggerSortFreeze();
     saveData();
     renderAll();
     showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
@@ -1399,15 +1495,33 @@ function quickAdjustDays(accountId, deltaDays) {
     acc.status = 'sprint_cooldown';
   }
 
+  addHistoryEntry({
+    actionType: 'adjust_time',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Waktu disesuaikan ${deltaDays > 0 ? '+' : ''}${deltaDays} Hari`,
+    prevState
+  });
+
+  triggerSortFreeze();
   saveData();
   renderAll();
-  showToast(`⏱️ Waktu disesuaikan ${deltaDays > 0 ? '+' : ''}${deltaDays} Hari untuk "${acc.name || acc.email}"`, 'info');
+  showToast(`⏱️ Waktu dikurangi/ditambah ${deltaDays > 0 ? '+' : ''}${deltaDays} Hari untuk "${acc.name || acc.email}"`, 'info');
 }
 
-// Tambah / Kurang Menit Cepat (+15 Mnt, -15 Mnt)
+// Tambah / Kurang Menit Cepat (-30 Mnt, -15 Mnt, -5 Mnt, +15 Mnt)
 function quickAdjustMins(accountId, deltaMins) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
 
   let currentMs = 0;
   if (acc.resetAt) {
@@ -1424,6 +1538,7 @@ function quickAdjustMins(accountId, deltaMins) {
     acc.resetAt = null;
     acc.durationMs = 0;
     acc.notified = false;
+    triggerSortFreeze();
     saveData();
     renderAll();
     showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
@@ -1444,9 +1559,19 @@ function quickAdjustMins(accountId, deltaMins) {
     acc.status = 'sprint_cooldown';
   }
 
+  addHistoryEntry({
+    actionType: 'adjust_time',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Waktu disesuaikan ${deltaMins > 0 ? '+' : ''}${deltaMins} Menit`,
+    prevState
+  });
+
+  triggerSortFreeze();
   saveData();
   renderAll();
-  showToast(`⏱️ Waktu disesuaikan ${deltaMins > 0 ? '+' : ''}${deltaMins} Menit untuk "${acc.name || acc.email}"`, 'info');
+  showToast(`⏱️ Waktu dikurangi/ditambah ${deltaMins > 0 ? '+' : ''}${deltaMins} Menit untuk "${acc.name || acc.email}"`, 'info');
 }
 
 // --- Render UI ---
@@ -1520,8 +1645,23 @@ function renderCards() {
     // Urut nomor akun: Akun 1, Akun 2, dst
     filtered.sort(compareAccountNames);
   } else {
-    // Default & Rekomendasi: Akun Fresh / Jarang Digunakan di kiri atas!
-    filtered = sortAccountsByRecommendation(filtered);
+    // Cek apakah posisi kartu sedang dikunci (freeze 1 menit saat sedang kurangi jam)
+    const isFrozen = Date.now() < sortFrozenUntil && frozenOrderIds.length > 0;
+    if (isFrozen) {
+      // Pertahankan posisi kartu yang sedang tampil agar kartu TIDAK melompat saat tombol diklik!
+      filtered.sort((a, b) => {
+        const idxA = frozenOrderIds.indexOf(a.id);
+        const idxB = frozenOrderIds.indexOf(b.id);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return 0;
+      });
+    } else {
+      // Default & Rekomendasi: Akun Fresh / Jarang Digunakan di kiri atas!
+      filtered = sortAccountsByRecommendation(filtered);
+      frozenOrderIds = filtered.map(a => a.id);
+    }
   }
 
   if (filtered.length === 0) {
@@ -1654,21 +1794,28 @@ function renderCards() {
               <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
 
-            <!-- Penyesuaian Akhir 5 Jam saat Di-klik (Langsung sesuaikan agar pas dengan Antigravity) -->
+            <!-- Penyesuaian Akhir 5 Jam: Didominasi Tombol Pengurangan (Minus) -->
             <div class="click-adjust-section sprint">
               <div class="click-adjust-header">
-                <span>⚡ Sesuaikan Akhir 5 Jam (Klik langsung sesuai):</span>
+                <span>⚡ Kurangi Waktu / Set Sisa 5 Jam:</span>
               </div>
               <div class="click-chips-grid">
-                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 1)" title="Set tepat 1 Jam lagi">1 Jam</button>
-                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 2)" title="Set tepat 2 Jam lagi">2 Jam</button>
-                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 3)" title="Set tepat 3 Jam lagi">3 Jam</button>
-                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 4)" title="Set tepat 4 Jam lagi">4 Jam</button>
+                <!-- Tombol Pengurangan Cepat (Utama) -->
+                <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -2)" title="Kurangi 2 Jam">-2 Jam</button>
+                <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
+                <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -30)" title="Kurangi 30 Menit">-30 Mnt</button>
+                <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -15)" title="Kurangi 15 Menit">-15 Mnt</button>
+                <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -5)" title="Kurangi 5 Menit">-5 Mnt</button>
+                <!-- Preset Langsung Sisa Waktu -->
                 <button class="chip-btn highlight" onclick="quickSetHours('${acc.id}', 5)" title="Reset ke 5 Jam penuh">⚡ 5 Jam</button>
-                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
-                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
-                <button class="chip-btn step" onclick="quickAdjustMins('${acc.id}', -15)" title="Kurangi 15 Menit">-15 Mnt</button>
-                <button class="chip-btn step" onclick="quickAdjustMins('${acc.id}', 15)" title="Tambah 15 Menit">+15 Mnt</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 4)" title="Set sisa 4 Jam">4 Jam</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 3)" title="Set sisa 3 Jam">3 Jam</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 2)" title="Set sisa 2 Jam">2 Jam</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 1)" title="Set sisa 1 Jam">1 Jam</button>
+                <button class="chip-btn" onclick="quickSetMinutes('${acc.id}', 30)" title="Set sisa 30 Menit">30 Mnt</button>
+                <!-- Koreksi Tambah (Minimal) -->
+                <button class="chip-btn plus" onclick="quickAdjustMins('${acc.id}', 15)" title="Tambah 15 Menit">+15 Mnt</button>
+                <button class="chip-btn plus" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
               </div>
             </div>
           </div>
@@ -1707,23 +1854,31 @@ function renderCards() {
               <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
 
-            <!-- Penyesuaian Akhir 7 Hari saat Di-klik (Langsung sesuaikan agar pas dengan Antigravity) -->
+            <!-- Penyesuaian Akhir 7 Hari: Didominasi Tombol Pengurangan (Minus) -->
             <div class="click-adjust-section weekly">
               <div class="click-adjust-header">
-                <span>🛑 Sesuaikan Akhir 7 Hari (Klik langsung sesuai):</span>
+                <span>🛑 Kurangi Waktu / Set Sisa 7 Hari:</span>
               </div>
               <div class="click-chips-grid">
-                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 1)" title="Set tepat 1 Hari lagi">1 Hari</button>
-                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 2)" title="Set tepat 2 Hari lagi">2 Hari</button>
-                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 3)" title="Set tepat 3 Hari lagi">3 Hari</button>
-                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 4)" title="Set tepat 4 Hari lagi">4 Hari</button>
-                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 5)" title="Set tepat 5 Hari lagi">5 Hari</button>
-                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 6)" title="Set tepat 6 Hari lagi">6 Hari</button>
+                <!-- Tombol Pengurangan Cepat (Utama) -->
+                <button class="chip-btn minus" onclick="quickAdjustDays('${acc.id}', -2)" title="Kurangi 2 Hari">-2 Hari</button>
+                <button class="chip-btn minus" onclick="quickAdjustDays('${acc.id}', -1)" title="Kurangi 1 Hari">-1 Hari</button>
+                <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -12)" title="Kurangi 12 Jam">-12 Jam</button>
+                <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -6)" title="Kurangi 6 Jam">-6 Jam</button>
+                <button class="chip-btn minus" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
+                <button class="chip-btn minus" onclick="quickAdjustMins('${acc.id}', -30)" title="Kurangi 30 Menit">-30 Mnt</button>
+                <!-- Preset Langsung Sisa Waktu -->
                 <button class="chip-btn highlight" onclick="quickSetDays('${acc.id}', 7)" title="Reset ke 7 Hari penuh">🛑 7 Hari</button>
-                <button class="chip-btn step" onclick="quickAdjustDays('${acc.id}', -1)" title="Kurangi 1 Hari">-1 Hari</button>
-                <button class="chip-btn step" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
-                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', -1)" title="Kurangi 1 Jam">-1 Jam</button>
-                <button class="chip-btn step" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 6)" title="Set sisa 6 Hari">6 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 5)" title="Set sisa 5 Hari">5 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 4)" title="Set sisa 4 Hari">4 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 3)" title="Set sisa 3 Hari">3 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 2)" title="Set sisa 2 Hari">2 Hari</button>
+                <button class="chip-btn" onclick="quickSetDays('${acc.id}', 1)" title="Set sisa 1 Hari">1 Hari</button>
+                <button class="chip-btn" onclick="quickSetHours('${acc.id}', 12)" title="Set sisa 12 Jam">12 Jam</button>
+                <!-- Koreksi Tambah (Minimal) -->
+                <button class="chip-btn plus" onclick="quickAdjustHours('${acc.id}', 1)" title="Tambah 1 Jam">+1 Jam</button>
+                <button class="chip-btn plus" onclick="quickAdjustDays('${acc.id}', 1)" title="Tambah 1 Hari">+1 Hari</button>
               </div>
             </div>
           </div>
@@ -1940,6 +2095,9 @@ function setupEventListeners() {
       document.querySelectorAll('.filter-pills .pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       currentFilter = pill.getAttribute('data-filter');
+      sortFrozenUntil = 0;
+      frozenOrderIds = [];
+      if (sortUnfreezeTimer) clearTimeout(sortUnfreezeTimer);
       renderCards();
     });
   });
@@ -2046,6 +2204,7 @@ window.deleteAccount = deleteAccount;
 window.copyEmail = copyEmail;
 window.applyManualAdjustment = applyManualAdjustment;
 window.quickSetHours = quickSetHours;
+window.quickSetMinutes = quickSetMinutes;
 window.quickSetDays = quickSetDays;
 window.quickAdjustHours = quickAdjustHours;
 window.quickAdjustDays = quickAdjustDays;
