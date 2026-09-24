@@ -1146,6 +1146,27 @@ function clearSortFreeze() {
   }
 }
 
+function restoreToRecommended() {
+  if (searchQuery && searchQuery.trim()) {
+    searchQuery = '';
+    const searchInput = document.getElementById('search-input');
+    const btnClear = document.getElementById('btn-clear-search');
+    if (searchInput) searchInput.value = '';
+    if (btnClear) btnClear.classList.remove('visible');
+  }
+
+  currentFilter = 'recommended';
+  document.querySelectorAll('.filter-pills .pill').forEach(p => {
+    if (p.getAttribute('data-filter') === 'recommended') {
+      p.classList.add('active');
+    } else {
+      p.classList.remove('active');
+    }
+  });
+
+  clearSortFreeze();
+}
+
 function triggerSortFreeze() {
   sortFrozenUntil = Date.now() + 60000; // Kunci urutan selama 60 detik (1 menit)
 
@@ -1285,9 +1306,9 @@ function applyParsedTime(accountId, parsed) {
     prevState
   });
 
-  // Hapus penguncian urutan agar kartu yang baru di-paste LANGSUNG TURUN ke daftar cooldown
-  // dan akun fresh siap pakai berikutnya langsung naik ke posisi rekomendasi utama teratas
-  clearSortFreeze();
+  // Kembalikan ke filter rekomendasi & bersihkan pencarian agar kartu yang baru di-paste
+  // LANGSUNG TURUN ke daftar cooldown dan akun fresh siap pakai berikutnya langsung tampil di posisi #1
+  restoreToRecommended();
   saveData();
   renderAll();
   showToastWithUndo(`✅ Berhasil set waktu: ${parsed.description} untuk "${acc.name || acc.email}"`, acc.id, 'success');
@@ -1420,7 +1441,7 @@ function setSprintLimit(accountId) {
     prevState
   });
 
-  clearSortFreeze();
+  restoreToRecommended();
   saveData();
   renderAll();
   showToastWithUndo(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
@@ -1459,7 +1480,7 @@ function setWeeklyLimit(accountId) {
     prevState
   });
 
-  clearSortFreeze();
+  restoreToRecommended();
   saveData();
   renderAll();
   showToastWithUndo(`🛑 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
@@ -1573,7 +1594,7 @@ function quickSetHours(accountId, targetHours) {
     desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`
   });
 
-  clearSortFreeze();
+  restoreToRecommended();
   saveData();
   renderAll();
   showToast(`⚡ Hitung mundur disetel ke ${targetHours} Jam untuk "${acc.name || acc.email}"`, 'warning');
@@ -1613,7 +1634,7 @@ function quickSetMinutes(accountId, targetMinutes) {
     prevState
   });
 
-  clearSortFreeze();
+  restoreToRecommended();
   saveData();
   renderAll();
   showToast(`⚡ Hitung mundur disetel ke ${targetMinutes} Menit untuk "${acc.name || acc.email}"`, 'warning');
@@ -1636,7 +1657,7 @@ function quickSetDays(accountId, targetDays) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
-  clearSortFreeze();
+  restoreToRecommended();
   saveData();
   renderAll();
   showToast(`🛑 Hitung mundur disetel ke ${targetDays} Hari untuk "${acc.name || acc.email}"`, 'warning');
@@ -2382,15 +2403,7 @@ function setupEventListeners() {
 
     // Jika user menghapus seluruh kata kunci pencarian (backspace sampai kosong)
     if (!searchQuery.trim()) {
-      currentFilter = 'recommended';
-      document.querySelectorAll('.filter-pills .pill').forEach(p => {
-        if (p.getAttribute('data-filter') === 'recommended') {
-          p.classList.add('active');
-        } else {
-          p.classList.remove('active');
-        }
-      });
-      clearSortFreeze();
+      restoreToRecommended();
     }
 
     renderCards();
@@ -2416,30 +2429,7 @@ function setupEventListeners() {
 
 // --- Fungsi Hapus Pencarian Cepat ---
 function clearSearch() {
-  const searchInput = document.getElementById('search-input');
-  const btnClear = document.getElementById('btn-clear-search');
-  if (searchInput) {
-    searchInput.value = '';
-    searchQuery = '';
-  }
-  if (btnClear) {
-    btnClear.classList.remove('visible');
-  }
-
-  // Otomatis kembalikan ke filter Rekomendasi (Fresh Teratas)
-  currentFilter = 'recommended';
-  document.querySelectorAll('.filter-pills .pill').forEach(p => {
-    if (p.getAttribute('data-filter') === 'recommended') {
-      p.classList.add('active');
-    } else {
-      p.classList.remove('active');
-    }
-  });
-
-  // Bersihkan penguncian posisi kartu (unfreeze)
-  clearSortFreeze();
-
-  // Render ulang kartu langsung dengan urutan rekomendasi fresh teratas
+  restoreToRecommended();
   renderCards();
 }
 
