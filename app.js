@@ -907,6 +907,7 @@ function resetToReady(accountId) {
     prevState
   });
 
+  clearSortFreeze();
   saveData();
   renderAll();
   showToast(`🟢 Akun "${acc.name || acc.email}" berhasil dikembalikan ke Siap Pakai!`, 'success');
@@ -1136,6 +1137,15 @@ let sortFrozenUntil = 0;
 let frozenOrderIds = [];
 let sortUnfreezeTimer = null;
 
+function clearSortFreeze() {
+  sortFrozenUntil = 0;
+  frozenOrderIds = [];
+  if (sortUnfreezeTimer) {
+    clearTimeout(sortUnfreezeTimer);
+    sortUnfreezeTimer = null;
+  }
+}
+
 function triggerSortFreeze() {
   sortFrozenUntil = Date.now() + 60000; // Kunci urutan selama 60 detik (1 menit)
 
@@ -1149,8 +1159,7 @@ function triggerSortFreeze() {
 
   if (sortUnfreezeTimer) clearTimeout(sortUnfreezeTimer);
   sortUnfreezeTimer = setTimeout(() => {
-    sortFrozenUntil = 0;
-    frozenOrderIds = [];
+    clearSortFreeze();
     renderCards();
     showToast('🔄 Posisi kartu diperbarui ke urutan terbaru', 'info');
   }, 60000);
@@ -1276,7 +1285,9 @@ function applyParsedTime(accountId, parsed) {
     prevState
   });
 
-  triggerSortFreeze();
+  // Hapus penguncian urutan agar kartu yang baru di-paste LANGSUNG TURUN ke daftar cooldown
+  // dan akun fresh siap pakai berikutnya langsung naik ke posisi rekomendasi utama teratas
+  clearSortFreeze();
   saveData();
   renderAll();
   showToastWithUndo(`✅ Berhasil set waktu: ${parsed.description} untuk "${acc.name || acc.email}"`, acc.id, 'success');
@@ -1409,6 +1420,7 @@ function setSprintLimit(accountId) {
     prevState
   });
 
+  clearSortFreeze();
   saveData();
   renderAll();
   showToastWithUndo(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
@@ -1447,6 +1459,7 @@ function setWeeklyLimit(accountId) {
     prevState
   });
 
+  clearSortFreeze();
   saveData();
   renderAll();
   showToastWithUndo(`🛑 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
@@ -1560,7 +1573,7 @@ function quickSetHours(accountId, targetHours) {
     desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`
   });
 
-  triggerSortFreeze();
+  clearSortFreeze();
   saveData();
   renderAll();
   showToast(`⚡ Hitung mundur disetel ke ${targetHours} Jam untuk "${acc.name || acc.email}"`, 'warning');
@@ -1600,7 +1613,7 @@ function quickSetMinutes(accountId, targetMinutes) {
     prevState
   });
 
-  triggerSortFreeze();
+  clearSortFreeze();
   saveData();
   renderAll();
   showToast(`⚡ Hitung mundur disetel ke ${targetMinutes} Menit untuk "${acc.name || acc.email}"`, 'warning');
@@ -1623,7 +1636,7 @@ function quickSetDays(accountId, targetDays) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
-  triggerSortFreeze();
+  clearSortFreeze();
   saveData();
   renderAll();
   showToast(`🛑 Hitung mundur disetel ke ${targetDays} Hari untuk "${acc.name || acc.email}"`, 'warning');
@@ -1657,7 +1670,7 @@ function quickAdjustHours(accountId, deltaHours) {
     acc.resetAt = null;
     acc.durationMs = 0;
     acc.notified = false;
-    triggerSortFreeze();
+    clearSortFreeze();
     saveData();
     renderAll();
     showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
@@ -1721,7 +1734,7 @@ function quickAdjustDays(accountId, deltaDays) {
     acc.resetAt = null;
     acc.durationMs = 0;
     acc.notified = false;
-    triggerSortFreeze();
+    clearSortFreeze();
     saveData();
     renderAll();
     showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
@@ -1785,7 +1798,7 @@ function quickAdjustMins(accountId, deltaMins) {
     acc.resetAt = null;
     acc.durationMs = 0;
     acc.notified = false;
-    triggerSortFreeze();
+    clearSortFreeze();
     saveData();
     renderAll();
     showToast(`🟢 Akun "${acc.name || acc.email}" siap digunakan!`, 'success');
@@ -1866,16 +1879,18 @@ function renderCards() {
   if (!grid) return;
 
   let filtered = accounts.filter(acc => {
-    if (currentFilter === 'ready' && acc.status !== 'ready') return false;
-    if (currentFilter === 'sprint' && acc.status !== 'sprint_cooldown') return false;
-    if (currentFilter === 'weekly' && acc.status !== 'weekly_locked') return false;
-
+    // Jika ada kata kunci pencarian, cari di SEMUA akun
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchEmail = acc.email.toLowerCase().includes(q);
       const matchName = (acc.name || '').toLowerCase().includes(q);
-      if (!matchEmail && !matchName) return false;
+      return matchEmail || matchName;
     }
+
+    if (currentFilter === 'ready' && acc.status !== 'ready') return false;
+    if (currentFilter === 'sprint' && acc.status !== 'sprint_cooldown') return false;
+    if (currentFilter === 'weekly' && acc.status !== 'weekly_locked') return false;
+
     return true;
   });
 
@@ -1907,7 +1922,9 @@ function renderCards() {
     } else {
       // Default & Rekomendasi: Akun Fresh / Jarang Digunakan di kiri atas!
       filtered = sortAccountsByRecommendation(filtered);
-      frozenOrderIds = filtered.map(a => a.id);
+      if (!searchQuery.trim()) {
+        frozenOrderIds = filtered.map(a => a.id);
+      }
     }
   }
 
@@ -2332,9 +2349,15 @@ function setupEventListeners() {
       document.querySelectorAll('.filter-pills .pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       currentFilter = pill.getAttribute('data-filter');
-      sortFrozenUntil = 0;
-      frozenOrderIds = [];
-      if (sortUnfreezeTimer) clearTimeout(sortUnfreezeTimer);
+
+      // Jika ada teks pencarian saat user klik filter pill, bersihkan pencarian
+      if (searchQuery) {
+        searchQuery = '';
+        if (searchInput) searchInput.value = '';
+        updateClearButtonVisibility();
+      }
+
+      clearSortFreeze();
       renderCards();
     });
   });
@@ -2356,12 +2379,27 @@ function setupEventListeners() {
   searchInput?.addEventListener('input', (e) => {
     searchQuery = e.target.value;
     updateClearButtonVisibility();
+
+    // Jika user menghapus seluruh kata kunci pencarian (backspace sampai kosong)
+    if (!searchQuery.trim()) {
+      currentFilter = 'recommended';
+      document.querySelectorAll('.filter-pills .pill').forEach(p => {
+        if (p.getAttribute('data-filter') === 'recommended') {
+          p.classList.add('active');
+        } else {
+          p.classList.remove('active');
+        }
+      });
+      clearSortFreeze();
+    }
+
     renderCards();
   });
 
   searchInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       clearSearch();
+      searchInput.blur();
     }
   });
 
@@ -2369,8 +2407,6 @@ function setupEventListeners() {
     e.preventDefault();
     clearSearch();
   });
-
-  
 
   // Minta izin notifikasi browser
   window.addEventListener('click', () => {
@@ -2385,11 +2421,25 @@ function clearSearch() {
   if (searchInput) {
     searchInput.value = '';
     searchQuery = '';
-    searchInput.focus();
   }
   if (btnClear) {
     btnClear.classList.remove('visible');
   }
+
+  // Otomatis kembalikan ke filter Rekomendasi (Fresh Teratas)
+  currentFilter = 'recommended';
+  document.querySelectorAll('.filter-pills .pill').forEach(p => {
+    if (p.getAttribute('data-filter') === 'recommended') {
+      p.classList.add('active');
+    } else {
+      p.classList.remove('active');
+    }
+  });
+
+  // Bersihkan penguncian posisi kartu (unfreeze)
+  clearSortFreeze();
+
+  // Render ulang kartu langsung dengan urutan rekomendasi fresh teratas
   renderCards();
 }
 
