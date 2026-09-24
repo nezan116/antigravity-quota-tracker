@@ -1156,6 +1156,224 @@ function triggerSortFreeze() {
   }, 60000);
 }
 
+
+// --- Sistem Smart Paste & Parser Waktu Antigravity ---
+function parseAntigravityTime(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+  const text = rawText.trim().toLowerCase();
+
+  let days = 0;
+  let hours = 0;
+  let minutes = 0;
+  let seconds = 0;
+  let hasMatch = false;
+
+  // 1. Cek pola hari / days / d
+  const dayMatch = text.match(/(\d+)\s*(?:days?|hari|d)\b/);
+  if (dayMatch) {
+    days = parseInt(dayMatch[1], 10);
+    hasMatch = true;
+  }
+
+  // 2. Cek pola jam / hours / hrs / h
+  const hourMatch = text.match(/(\d+)\s*(?:hours?|hrs?|jam|h)\b/);
+  if (hourMatch) {
+    hours = parseInt(hourMatch[1], 10);
+    hasMatch = true;
+  }
+
+  // 3. Cek pola menit / minutes / mins / mnt / m
+  const minMatch = text.match(/(\d+)\s*(?:minutes?|mins?|menit|mnt|m)\b/);
+  if (minMatch) {
+    minutes = parseInt(minMatch[1], 10);
+    hasMatch = true;
+  }
+
+  // 4. Cek pola detik / seconds / secs / dtk / s
+  const secMatch = text.match(/(\d+)\s*(?:seconds?|secs?|detik|dtk|s)\b/);
+  if (secMatch) {
+    seconds = parseInt(secMatch[1], 10);
+    hasMatch = true;
+  }
+
+  // 5. Cek format jam:menit[:detik] misal "04:59" atau "1:23:45"
+  if (!hasMatch) {
+    const colonMatch = text.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+    if (colonMatch) {
+      hours = parseInt(colonMatch[1], 10);
+      minutes = parseInt(colonMatch[2], 10);
+      if (colonMatch[3]) seconds = parseInt(colonMatch[3], 10);
+      hasMatch = true;
+    }
+  }
+
+  // 6. Cek format angka saja jika user cuma ketik misal "4" atau "3.5"
+  if (!hasMatch) {
+    const singleNum = text.match(/^(\d+(?:\.\d+)?)$/);
+    if (singleNum) {
+      const val = parseFloat(singleNum[1]);
+      hours = Math.floor(val);
+      minutes = Math.round((val - hours) * 60);
+      hasMatch = true;
+    }
+  }
+
+  if (!hasMatch) return null;
+
+  const totalMs = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+  if (totalMs <= 0) return null;
+
+  // Jika ada setting hari atau total waktu > 6 jam, set limit mingguan (7 hari)
+  // Jika <= 6 jam, set cooldown 5 jam
+  const status = (days > 0 || totalMs > 6 * 3600 * 1000) ? 'weekly_locked' : 'sprint_cooldown';
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} Hari`);
+  if (hours > 0) parts.push(`${hours} Jam`);
+  if (minutes > 0) parts.push(`${minutes} Menit`);
+  if (seconds > 0) parts.push(`${seconds} Detik`);
+
+  return {
+    days,
+    hours,
+    minutes,
+    seconds,
+    totalMs,
+    status,
+    description: parts.join(' ') || '0 Menit'
+  };
+}
+
+function applyParsedTime(accountId, parsed) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt
+  };
+
+  const now = new Date();
+  const reset = new Date(now.getTime() + parsed.totalMs);
+
+  acc.status = parsed.status;
+  acc.lockedAt = now.toISOString();
+  acc.resetAt = reset.toISOString();
+  acc.durationMs = parsed.totalMs;
+  acc.notified = false;
+  acc.lastUsedAt = now.toISOString();
+  acc.useCount = (acc.useCount || 0) + 1;
+
+  addHistoryEntry({
+    actionType: parsed.status === 'weekly_locked' ? 'weekly_limit' : 'sprint_limit',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Set dari Antigravity: ${parsed.description} (hingga ${formatDateTime(reset.toISOString())})`,
+    prevState
+  });
+
+  triggerSortFreeze();
+  saveData();
+  renderAll();
+  showToastWithUndo(`✅ Berhasil set waktu: ${parsed.description} untuk "${acc.name || acc.email}"`, acc.id, 'success');
+}
+
+async function pasteFromAntigravity(accountId) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  let text = '';
+  // 1. Coba baca langsung dari clipboard browser
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    try {
+      text = await navigator.clipboard.readText();
+    } catch (e) {
+      console.warn('Clipboard read error or permission denied:', e);
+    }
+  }
+
+  if (text) {
+    const parsed = parseAntigravityTime(text);
+    if (parsed) {
+      applyParsedTime(accountId, parsed);
+      return;
+    }
+  }
+
+  // 2. Jika clipboard kosong atau format belum dikenali, tampilkan prompt paste cepat
+  const manualText = prompt(
+    `📋 Tempel (Paste) teks sisa waktu dari Antigravity untuk "${acc.name || acc.email}":\n\nContoh:\n• "in 4 hours, 59 minutes."\n• "it will fully refresh in 6 days, 7 hours."\n• atau ketik langsung "4:59" atau "4h 30m"`,
+    text || ''
+  );
+
+  if (!manualText) return;
+
+  const parsed = parseAntigravityTime(manualText);
+  if (parsed) {
+    applyParsedTime(accountId, parsed);
+  } else {
+    showToast('Format waktu tidak dikenali. Contoh: "4 hours, 59 minutes" atau "4:30"', 'warning');
+  }
+}
+
+function applyCustomTime(accountId) {
+  const acc = accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const input = document.getElementById(`time-input-${accountId}`);
+  if (!input) return;
+
+  const val = input.value.trim();
+  if (!val) {
+    showToast('Silakan ketik sisa waktu (contoh: 4h 59m atau 4:30)', 'warning');
+    input.focus();
+    return;
+  }
+
+  // Cek jika user ketik delta minus/plus seperti "-15m", "-1h", "+30m"
+  if (val.startsWith('-') || val.startsWith('+')) {
+    const isMinus = val.startsWith('-');
+    const clean = val.replace(/^[+-]/, '').trim();
+    const parsedDelta = parseAntigravityTime(clean);
+    if (parsedDelta) {
+      let currentMs = 0;
+      if (acc.resetAt) {
+        const diff = new Date(acc.resetAt).getTime() - Date.now();
+        if (diff > 0) currentMs = diff;
+      }
+      const deltaMs = isMinus ? -parsedDelta.totalMs : parsedDelta.totalMs;
+      const newMs = Math.max(0, currentMs + deltaMs);
+      if (newMs <= 0) {
+        resetToReady(accountId);
+        return;
+      }
+      const reset = new Date(Date.now() + newMs);
+      acc.status = newMs > 6 * 3600 * 1000 ? 'weekly_locked' : 'sprint_cooldown';
+      acc.lockedAt = new Date().toISOString();
+      acc.resetAt = reset.toISOString();
+      acc.durationMs = newMs;
+      acc.notified = false;
+      triggerSortFreeze();
+      saveData();
+      renderAll();
+      showToast(`⏱️ Waktu disesuaikan ${val} untuk "${acc.name || acc.email}"`, 'info');
+      return;
+    }
+  }
+
+  const parsed = parseAntigravityTime(val);
+  if (parsed) {
+    applyParsedTime(accountId, parsed);
+  } else {
+    showToast('Format waktu tidak valid! Contoh: 4h 59m, 4:59, atau 6d 7h', 'warning');
+    input.focus();
+  }
+}
+
 // --- Actions on Accounts ---
 
 // 1. Kena Limit 5 Jam
@@ -1779,27 +1997,37 @@ function renderCards() {
 
         <!-- TEPAT SETELAH NAMA LABEL AKUN: KONTROL WAKTU / LIMIT -->
         ${isReady ? `
-          <!-- Kondisi Siap Pakai: Tombol Klik Langsung ke 5 Jam atau 7 Hari -->
-          <div class="card-ready-actions">
-            <div class="ready-box">
-              <div class="ready-box-title">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                <span>Token Aktif & Siap Digunakan</span>
-              </div>
-              <div class="ready-box-desc">
-                Akun ini siap dipakai di Antigravity. Saat kuota baru saja habis, klik salah satu tombol di bawah untuk langsung menghitung mundur:
-              </div>
+          <!-- Kondisi Siap Pakai: Smart Paste & Input Waktu Presisi Antigravity -->
+          <div class="card-ready-box">
+            <div class="ready-title">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <span>Token Siap Digunakan</span>
+            </div>
+            <div class="ready-subtitle">
+              Saat kuota habis, klik tombol tempel di bawah untuk menyamakan waktu dengan Antigravity secara instan:
             </div>
 
-            <div class="btn-row-limits">
-              <button class="btn-limit-5h" onclick="setSprintLimit('${acc.id}')" title="Klik langsung: Mulai hitung mundur 5 jam">
-                ⚡ Habis Limit 5 Jam
-              </button>
-              <button class="btn-limit-weekly" onclick="setWeeklyLimit('${acc.id}')" title="Klik langsung: Mulai hitung mundur 7 hari">
-                🛑 Habis Limit Mingguan (7 Hari)
-              </button>
+            <!-- 1. Tombol Utama: 1-Klik Tempel dari Antigravity -->
+            <button type="button" class="btn-paste-primary" onclick="pasteFromAntigravity('${acc.id}')" title="1-Klik: Otomatis membaca teks sisa waktu yang kamu copy dari Antigravity">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+              </svg>
+              <span>📋 Tempel dari Antigravity</span>
+            </button>
+
+            <!-- 2. Input Manual Cepat -->
+            <div class="smart-input-row">
+              <input type="text" id="time-input-${acc.id}" class="smart-time-input" placeholder="Atau ketik: 4h 59m, 6d 7h, 4:59..." onkeydown="if(event.key==='Enter') applyCustomTime('${acc.id}')">
+              <button type="button" class="btn-smart-submit" onclick="applyCustomTime('${acc.id}')" title="Mulai hitung mundur">Mulai</button>
+            </div>
+
+            <!-- 3. Preset Cepat -->
+            <div class="quick-presets-strip">
+              <button type="button" class="btn-preset-mini sprint" onclick="quickSetHours('${acc.id}', 5)" title="Reset ke 5 Jam penuh">⚡ 5 Jam Penuh</button>
+              <button type="button" class="btn-preset-mini weekly" onclick="quickSetDays('${acc.id}', 7)" title="Reset ke 7 Hari penuh">🛑 7 Hari Penuh</button>
             </div>
           </div>
         ` : isSprint ? `
@@ -2214,6 +2442,9 @@ window.copyEmail = copyEmail;
 window.applyManualAdjustment = applyManualAdjustment;
 window.quickSetHours = quickSetHours;
 window.quickSetMinutes = quickSetMinutes;
+window.pasteFromAntigravity = pasteFromAntigravity;
+window.applyCustomTime = applyCustomTime;
+window.parseAntigravityTime = parseAntigravityTime;
 window.quickSetDays = quickSetDays;
 window.quickAdjustHours = quickAdjustHours;
 window.quickAdjustDays = quickAdjustDays;

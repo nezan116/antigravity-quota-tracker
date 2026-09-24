@@ -778,15 +778,291 @@ body {
   color: #ffffff;
 }
 
-.card-ready-actions {
+/* Card Ready Box: Smart Paste & Presisi Antigravity */
+.card-ready-box {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 
-.ready-tip {
+.ready-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #34d399;
+}
+
+.ready-subtitle {
   font-size: 11px;
   color: var(--text-muted);
+  line-height: 1.35;
+}
+
+/* Primary Paste Button */
+.btn-paste-primary {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 182, 212, 0.22));
+  border: 1px solid rgba(52, 211, 153, 0.6);
+  color: #6ee7b7;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15);
+}
+
+.btn-paste-primary:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.38), rgba(6, 182, 212, 0.38));
+  border-color: rgba(52, 211, 153, 0.9);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.28);
+}
+
+.btn-paste-primary:active {
+  transform: translateY(1px);
+}
+
+/* Smart Input Row */
+.smart-input-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.smart-time-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.smart-time-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+}
+
+.smart-time-input::placeholder {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.btn-smart-submit {
+  background: rgba(99, 102, 241, 0.25);
+  border: 1px solid rgba(129, 140, 248, 0.5);
+  color: #c7d2fe;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-smart-submit:hover {
+  background: rgba(99, 102, 241, 0.45);
+  border-color: #818cf8;
+  color: #ffffff;
+}
+
+/* Quick Presets Strip */
+.quick-presets-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.btn-preset-mini {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.btn-preset-mini.sprint {
+  color: #fbbf24;
+}
+.btn-preset-mini.sprint:hover {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #ffffff;
+}
+
+.btn-preset-mini.weekly {
+  color: #fca5a5;
+}
+.btn-preset-mini.weekly:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ffffff;
+}
+
+/* Cooldown Sync Box */
+.cooldown-sync-box {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sync-header {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
+.sync-actions-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.btn-paste-sync {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-paste-sync:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(99, 102, 241, 0.35));
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.sync-input-group {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sync-time-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  outline: none;
+}
+
+.sync-time-input:focus {
+  border-color: #38bdf8;
+}
+
+.sync-time-input::placeholder {
+  color: #64748b;
+  font-size: 10.5px;
+}
+
+.btn-sync-submit {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-sync-submit:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.sync-chips-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.chip-mini {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 4px 1px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.chip-mini.minus {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+  font-weight: 700;
+}
+.chip-mini.minus:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ffffff;
+}
+
+.chip-mini.plus {
+  color: #86efac;
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
+  font-weight: 700;
+}
+.chip-mini.plus:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #ffffff;
 }
 
 .card-switch-limit {
