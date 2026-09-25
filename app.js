@@ -8,6 +8,7 @@
 const STORAGE_KEY = 'antigravity_accounts_v2';
 const SOUND_KEY = 'antigravity_sound_enabled';
 const HISTORY_KEY = 'antigravity_history_v1';
+const CURRENT_USING_KEY = 'antigravity_current_using_account';
 
 let accounts = [];
 let actionHistory = [];
@@ -15,6 +16,10 @@ let soundEnabled = true;
 let currentFilter = 'recommended';
 let searchQuery = '';
 let countdownInterval = null;
+let currentUsingAccountId = null;
+try {
+  currentUsingAccountId = localStorage.getItem(CURRENT_USING_KEY) || null;
+} catch (e) {}
 // Daftar profil Chrome yang terdeteksi otomatis (Bekerja 100% online di GitHub Pages)
 const EMBEDDED_CHROME_PROFILES = [
   {
@@ -552,6 +557,13 @@ function sortAccountsByRecommendation(list) {
 
     // 2. Keduanya READY: urutkan berdasarkan kesegaran (Fresh / Jarang Digunakan)
     if (a.status === 'ready' && b.status === 'ready') {
+      // Prioritas #1: Akun yang baru saja diklik "Buka Chrome" (Sedang Digunakan)
+      // SELALU berada di paling kiri atas agar saat kuota habis user langsung bisa tempel waktu!
+      if (currentUsingAccountId) {
+        if (a.id === currentUsingAccountId && b.id !== currentUsingAccountId) return -1;
+        if (b.id === currentUsingAccountId && a.id !== currentUsingAccountId) return 1;
+      }
+
       const usedA = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
       const usedB = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
 
@@ -952,6 +964,14 @@ async function loadData() {
     }
   }
 
+  if (currentUsingAccountId) {
+    const activeAcc = accounts.find(a => a.id === currentUsingAccountId);
+    if (!activeAcc || activeAcc.status !== 'ready') {
+      currentUsingAccountId = null;
+      try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    }
+  }
+
   const rawSound = localStorage.getItem(SOUND_KEY);
   soundEnabled = rawSound !== null ? JSON.parse(rawSound) : true;
   updateSoundButtonUI();
@@ -1167,6 +1187,18 @@ function restoreToRecommended() {
   clearSortFreeze();
 }
 
+function clearCurrentUsingAccount(e) {
+  if (e) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+  currentUsingAccountId = null;
+  try { localStorage.removeItem(CURRENT_USING_KEY); } catch (err) {}
+  clearSortFreeze();
+  renderCards();
+  showToast('ℹ️ Status aktif akun dibatalkan, kembali ke urutan rekomendasi semula.', 'info');
+}
+
 function triggerSortFreeze() {
   sortFrozenUntil = Date.now() + 60000; // Kunci urutan selama 60 detik (1 menit)
 
@@ -1306,6 +1338,11 @@ function applyParsedTime(accountId, parsed) {
     prevState
   });
 
+  if (currentUsingAccountId === acc.id) {
+    currentUsingAccountId = null;
+    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+  }
+
   // Kembalikan ke filter rekomendasi & bersihkan pencarian agar kartu yang baru di-paste
   // LANGSUNG TURUN ke daftar cooldown dan akun fresh siap pakai berikutnya langsung tampil di posisi #1
   restoreToRecommended();
@@ -1441,6 +1478,11 @@ function setSprintLimit(accountId) {
     prevState
   });
 
+  if (currentUsingAccountId === acc.id) {
+    currentUsingAccountId = null;
+    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+  }
+
   restoreToRecommended();
   saveData();
   renderAll();
@@ -1480,6 +1522,11 @@ function setWeeklyLimit(accountId) {
     prevState
   });
 
+  if (currentUsingAccountId === acc.id) {
+    currentUsingAccountId = null;
+    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+  }
+
   restoreToRecommended();
   saveData();
   renderAll();
@@ -1494,6 +1541,10 @@ function deleteAccount(accountId) {
   const displayName = acc.name ? `${acc.name} (${acc.email})` : acc.email;
   if (confirm(`Yakin ingin menghapus akun "${displayName}"?`)) {
     const deletedAcc = { ...acc };
+    if (currentUsingAccountId === accountId) {
+      currentUsingAccountId = null;
+      try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    }
     accounts = accounts.filter(a => a.id !== accountId);
 
     addHistoryEntry({
@@ -1594,6 +1645,11 @@ function quickSetHours(accountId, targetHours) {
     desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`
   });
 
+  if (currentUsingAccountId === acc.id) {
+    currentUsingAccountId = null;
+    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+  }
+
   restoreToRecommended();
   saveData();
   renderAll();
@@ -1634,6 +1690,11 @@ function quickSetMinutes(accountId, targetMinutes) {
     prevState
   });
 
+  if (currentUsingAccountId === acc.id) {
+    currentUsingAccountId = null;
+    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+  }
+
   restoreToRecommended();
   saveData();
   renderAll();
@@ -1656,6 +1717,11 @@ function quickSetDays(accountId, targetDays) {
   acc.notified = false;
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
+
+  if (currentUsingAccountId === acc.id) {
+    currentUsingAccountId = null;
+    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+  }
 
   restoreToRecommended();
   saveData();
@@ -1963,12 +2029,17 @@ function renderCards() {
     const isSprint = acc.status === 'sprint_cooldown';
     const isWeekly = acc.status === 'weekly_locked';
 
-    // Akun teratas di paling kiri atas adalah Rekomendasi Utama
-    const isTopRecommended = (currentFilter === 'recommended' || currentFilter === 'ready') && index === 0 && isReady;
+    // Cek apakah akun ini adalah akun yang baru saja diklik "Buka Chrome" (sedang digunakan)
+    const isCurrentlyUsing = acc.id === currentUsingAccountId && isReady;
+
+    // Akun teratas di paling kiri atas adalah Rekomendasi Utama (jika bukan sedang in-use)
+    const isTopRecommended = (currentFilter === 'recommended' || currentFilter === 'ready') && index === 0 && isReady && !isCurrentlyUsing;
 
     let statusClass = 'ready';
     let statusLabel = '🟢 BISA DIGUNAKAN';
-    let cardClass = 'status-ready' + (isTopRecommended ? ' is-top-recommended' : '');
+    let cardClass = 'status-ready' + 
+      (isCurrentlyUsing ? ' is-currently-using' : '') + 
+      (isTopRecommended ? ' is-top-recommended' : '');
 
     if (isSprint) {
       statusClass = 'sprint';
@@ -1993,13 +2064,25 @@ function renderCards() {
     const prof = findChromeProfileForEmail(acc.email);
     const chromeLabel = prof ? `Buka Chrome (${prof.name})` : 'Buka Chrome';
 
+    let headerBadgeHtml = '';
+    if (isCurrentlyUsing) {
+      headerBadgeHtml = `
+        <span class="card-inuse-badge" title="Akun ini sedang dibuka di Chrome. Begitu kuota habis di Antigravity, langsung klik 'Tempel' di kartu ini!">
+          ⚡ Sedang Digunakan di Chrome
+          <span class="btn-clear-inuse" onclick="clearCurrentUsingAccount(event)" title="Batalkan status aktif">✕</span>
+        </span>
+      `;
+    } else if (isTopRecommended) {
+      headerBadgeHtml = `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>`;
+    }
+
     return `
       <div class="account-card ${cardClass}" id="card-${acc.id}">
         <!-- 1. Header Bar: Nomor Akun, Tag Rekomendasi & Status Badge (Rapi Sejajar) -->
         <div class="card-header-bar">
           <div class="card-header-left">
             <span class="card-account-badge">${escapeHtml(acc.name || 'Akun')}</span>
-            ${isTopRecommended ? `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>` : ''}
+            ${headerBadgeHtml}
           </div>
           <div class="status-badge ${statusClass}">
             <span class="dot"></span>
@@ -2021,7 +2104,7 @@ function renderCards() {
             </svg>
             <span>Salin Email</span>
           </button>
-          <button type="button" class="btn-action-chrome" onclick="openChromeForAccount('${acc.id}')" title="Klik langsung: Buka profil Chrome ${escapeHtml(prof ? prof.name : acc.email)}">
+          <button type="button" class="btn-action-chrome ${isCurrentlyUsing ? 'is-active-chrome' : ''}" onclick="openChromeForAccount('${acc.id}')" title="Klik langsung: Buka profil Chrome ${escapeHtml(prof ? prof.name : acc.email)}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <circle cx="12" cy="12" r="4"/>
@@ -2041,7 +2124,7 @@ function renderCards() {
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              <span>Token Siap Digunakan</span>
+              <span>${isCurrentlyUsing ? '⚡ Sedang Digunakan di Chrome (Siap Ditempel Waktu)' : 'Token Siap Digunakan'}</span>
             </div>
             <div class="ready-subtitle">
               Saat kuota habis, klik tombol tempel di bawah untuk menyamakan waktu dengan Antigravity secara instan:
@@ -2459,17 +2542,28 @@ function openChromeForAccount(accountId) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
+  // Jadikan akun ini sebagai akun yang sedang aktif digunakan di Chrome
+  currentUsingAccountId = acc.id;
+  try {
+    localStorage.setItem(CURRENT_USING_KEY, acc.id);
+  } catch (e) {}
+
+  // Pastikan filter aktif adalah 'recommended' dan bersihkan pencarian
+  // agar kartu ini LANGSUNG BERADA DI PALING KIRI ATAS!
+  restoreToRecommended();
+  renderCards();
+
   const prof = findChromeProfileForEmail(acc.email);
 
   // Jika cocok dengan profil Chrome di laptop: langsung buka Chrome seketika!
   if (prof && prof.dir) {
-    showToast(`🚀 Membuka Chrome profil "${prof.name}"...`, 'success');
+    showToast(`🚀 Membuka Chrome "${prof.name}". Kartu ditempatkan di paling kiri atas agar siap ditempel waktu!`, 'success');
     launchViaWindowsProtocol(prof.dir);
     return;
   }
 
   // Jika belum ada profil Chrome lokal untuk email ini: langsung buka Google Account Switcher di tab baru
-  showToast(`🌐 Membuka Google Account Switcher untuk ${acc.email}...`, 'info');
+  showToast(`🌐 Membuka Google Account Switcher untuk ${acc.email}. Kartu ditempatkan di paling kiri atas!`, 'info');
   window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(acc.email)}`, '_blank');
 }
 
@@ -2491,6 +2585,7 @@ window.quickAdjustDays = quickAdjustDays;
 window.quickAdjustMins = quickAdjustMins;
 window.clearSearch = clearSearch;
 window.openChromeForAccount = openChromeForAccount;
+window.clearCurrentUsingAccount = clearCurrentUsingAccount;
 window.resetToReady = resetToReady;
 window.undoHistoryAction = undoHistoryAction;
 window.clearHistoryLog = clearHistoryLog;
