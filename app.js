@@ -2029,17 +2029,12 @@ function renderCards() {
     const isSprint = acc.status === 'sprint_cooldown';
     const isWeekly = acc.status === 'weekly_locked';
 
-    // Cek apakah akun ini adalah akun yang baru saja diklik "Buka Chrome" (sedang digunakan)
-    const isCurrentlyUsing = acc.id === currentUsingAccountId && isReady;
-
-    // Akun teratas di paling kiri atas adalah Rekomendasi Utama (jika bukan sedang in-use)
-    const isTopRecommended = (currentFilter === 'recommended' || currentFilter === 'ready') && index === 0 && isReady && !isCurrentlyUsing;
+    // Akun teratas di paling kiri atas adalah Rekomendasi Utama
+    const isTopRecommended = (currentFilter === 'recommended' || currentFilter === 'ready') && index === 0 && isReady;
 
     let statusClass = 'ready';
     let statusLabel = '🟢 BISA DIGUNAKAN';
-    let cardClass = 'status-ready' + 
-      (isCurrentlyUsing ? ' is-currently-using' : '') + 
-      (isTopRecommended ? ' is-top-recommended' : '');
+    let cardClass = 'status-ready' + (isTopRecommended ? ' is-top-recommended' : '');
 
     if (isSprint) {
       statusClass = 'sprint';
@@ -2064,25 +2059,13 @@ function renderCards() {
     const prof = findChromeProfileForEmail(acc.email);
     const chromeLabel = prof ? `Buka Chrome (${prof.name})` : 'Buka Chrome';
 
-    let headerBadgeHtml = '';
-    if (isCurrentlyUsing) {
-      headerBadgeHtml = `
-        <span class="card-inuse-badge" title="Akun ini sedang dibuka di Chrome. Begitu kuota habis di Antigravity, langsung klik 'Tempel' di kartu ini!">
-          ⚡ Sedang Digunakan di Chrome
-          <span class="btn-clear-inuse" onclick="clearCurrentUsingAccount(event)" title="Batalkan status aktif">✕</span>
-        </span>
-      `;
-    } else if (isTopRecommended) {
-      headerBadgeHtml = `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>`;
-    }
-
     return `
       <div class="account-card ${cardClass}" id="card-${acc.id}">
         <!-- 1. Header Bar: Nomor Akun, Tag Rekomendasi & Status Badge (Rapi Sejajar) -->
         <div class="card-header-bar">
           <div class="card-header-left">
             <span class="card-account-badge">${escapeHtml(acc.name || 'Akun')}</span>
-            ${headerBadgeHtml}
+            ${isTopRecommended ? `<span class="card-rec-top-badge" title="Akun paling fresh / terlama tidak digunakan. Pakai akun ini sekarang!">⭐ Rekomendasi Utama</span>` : ''}
           </div>
           <div class="status-badge ${statusClass}">
             <span class="dot"></span>
@@ -2104,7 +2087,7 @@ function renderCards() {
             </svg>
             <span>Salin Email</span>
           </button>
-          <button type="button" class="btn-action-chrome ${isCurrentlyUsing ? 'is-active-chrome' : ''}" onclick="openChromeForAccount('${acc.id}')" title="Klik langsung: Buka profil Chrome ${escapeHtml(prof ? prof.name : acc.email)}">
+          <button type="button" class="btn-action-chrome" onclick="openChromeForAccount('${acc.id}')" title="Klik langsung: Buka profil Chrome ${escapeHtml(prof ? prof.name : acc.email)}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <circle cx="12" cy="12" r="4"/>
@@ -2124,7 +2107,7 @@ function renderCards() {
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              <span>${isCurrentlyUsing ? '⚡ Sedang Digunakan di Chrome (Siap Ditempel Waktu)' : 'Token Siap Digunakan'}</span>
+              <span>Token Siap Digunakan</span>
             </div>
             <div class="ready-subtitle">
               Saat kuota habis, klik tombol tempel di bawah untuk menyamakan waktu dengan Antigravity secara instan:
@@ -2557,13 +2540,13 @@ function openChromeForAccount(accountId) {
 
   // Jika cocok dengan profil Chrome di laptop: langsung buka Chrome seketika!
   if (prof && prof.dir) {
-    showToast(`🚀 Membuka Chrome "${prof.name}". Kartu ditempatkan di paling kiri atas agar siap ditempel waktu!`, 'success');
+    showToast(`🚀 Membuka Chrome profil "${prof.name}"...`, 'success');
     launchViaWindowsProtocol(prof.dir);
     return;
   }
 
   // Jika belum ada profil Chrome lokal untuk email ini: langsung buka Google Account Switcher di tab baru
-  showToast(`🌐 Membuka Google Account Switcher untuk ${acc.email}. Kartu ditempatkan di paling kiri atas!`, 'info');
+  showToast(`🌐 Membuka Google Account Switcher untuk ${acc.email}...`, 'info');
   window.open(`https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(acc.email)}`, '_blank');
 }
 
