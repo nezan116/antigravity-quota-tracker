@@ -9,6 +9,7 @@ const STORAGE_KEY = 'antigravity_accounts_v2';
 const SOUND_KEY = 'antigravity_sound_enabled';
 const HISTORY_KEY = 'antigravity_history_v1';
 const CURRENT_USING_KEY = 'antigravity_current_using_account';
+const CURRENT_USING_AT_KEY = 'antigravity_current_using_at';
 
 let accounts = [];
 let actionHistory = [];
@@ -17,8 +18,16 @@ let currentFilter = 'recommended';
 let searchQuery = '';
 let countdownInterval = null;
 let currentUsingAccountId = null;
+let currentUsingAt = 0;
 try {
   currentUsingAccountId = localStorage.getItem(CURRENT_USING_KEY) || null;
+  const rawAt = localStorage.getItem(CURRENT_USING_AT_KEY);
+  currentUsingAt = rawAt ? parseInt(rawAt, 10) : 0;
+  if (currentUsingAt && Date.now() - currentUsingAt > 45 * 60 * 1000) {
+    currentUsingAccountId = null;
+    localStorage.removeItem(CURRENT_USING_KEY);
+    localStorage.removeItem(CURRENT_USING_AT_KEY);
+  }
 } catch (e) {}
 // Daftar profil Chrome yang terdeteksi otomatis (Bekerja 100% online di GitHub Pages)
 const EMBEDDED_CHROME_PROFILES = [
@@ -547,43 +556,76 @@ function compareAccountNames(a, b) {
 
 // Mengurutkan akun berdasarkan rekomendasi:
 // 1. Akun siap pakai (ready) selalu di atas
-// 2. Di antara yang ready: yang paling jarang digunakan (fresh / belum dipakai / terlama tidak dipakai) ada di paling kiri atas
+// 2. Di antara yang ready:
+//    - Akun yang sedang aktif dibuka di Chrome berada di posisi #1 (paling kiri atas)
+//    - Akun fresh (belum pernah dipakai) di urutan awal
+//    - Akun yang sudah pernah dipakai diurutkan berdasarkan antrean FIFO (readyAt ascending):
+//      Akun yang sudah paling lama siap menunggu berada di depan,
+//      sedangkan akun yang BARU SAJA selesai reset jam berada di PALING BAWAH / AKHIR dari daftar akun yang bisa digunakan!
 // 3. Akun yang sedang limit/cooldown di bawahnya, diurutkan sisa waktu tercepat pulih
 function sortAccountsByRecommendation(list) {
+  // Validasi akun aktif di Chrome (timeout 30 menit agar tidak tertahan selamanya)
+  if (currentUsingAccountId) {
+    if (currentUsingAt && Date.now() - currentUsingAt > 30 * 60 * 1000) {
+      currentUsingAccountId = null;
+      currentUsingAt = 0;
+      try {
+        localStorage.removeItem(CURRENT_USING_KEY);
+        localStorage.removeItem(CURRENT_USING_AT_KEY);
+      } catch (e) {}
+    } else {
+      const activeAcc = accounts.find(a => a.id === currentUsingAccountId);
+      if (!activeAcc || activeAcc.status !== 'ready') {
+        currentUsingAccountId = null;
+        currentUsingAt = 0;
+        try {
+          localStorage.removeItem(CURRENT_USING_KEY);
+          localStorage.removeItem(CURRENT_USING_AT_KEY);
+        } catch (e) {}
+      }
+    }
+  }
+
   return [...list].sort((a, b) => {
     // 1. Status Ready selalu di atas yang Cooldown / Locked
     if (a.status === 'ready' && b.status !== 'ready') return -1;
     if (a.status !== 'ready' && b.status === 'ready') return 1;
 
-    // 2. Keduanya READY: urutkan berdasarkan kesegaran (Fresh / Jarang Digunakan)
+    // 2. Keduanya READY (BISA DIGUNAKAN):
     if (a.status === 'ready' && b.status === 'ready') {
-      // Prioritas #1: Akun yang baru saja diklik "Buka Chrome" (Sedang Digunakan)
-      // SELALU berada di paling kiri atas agar saat kuota habis user langsung bisa tempel waktu!
+      // Prioritas #1: Akun yang baru saja diklik "Buka Chrome" (sedang aktif digunakan)
+      // Ditaruh di paling kiri atas agar saat kuota habis user langsung bisa tempel waktu tanpa mencari
       if (currentUsingAccountId) {
         if (a.id === currentUsingAccountId && b.id !== currentUsingAccountId) return -1;
         if (b.id === currentUsingAccountId && a.id !== currentUsingAccountId) return 1;
       }
 
-      const usedA = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
-      const usedB = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+      const countA = a.useCount || 0;
+      const countB = b.useCount || 0;
 
-      // Belum pernah dipakai sama sekali -> paling atas (fresh)
-      if (usedA === 0 && usedB !== 0) return -1;
-      if (usedA !== 0 && usedB === 0) return 1;
+      // Akun yang belum pernah dipakai sama sekali (Fresh):
+      // Berada di baris depan, diurutkan nomor akun (Akun 1, Akun 2, ...)
+      const isFreshA = countA === 0 && !a.lastUsedAt;
+      const isFreshB = countB === 0 && !b.lastUsedAt;
 
-      // Keduanya belum pernah dipakai -> urut nomor akun (Akun 1, Akun 2, ...)
-      if (usedA === 0 && usedB === 0) {
+      if (isFreshA && !isFreshB) return -1;
+      if (!isFreshA && isFreshB) return 1;
+      if (isFreshA && isFreshB) {
         return compareAccountNames(a, b);
       }
 
-      // Keduanya pernah dipakai -> yang terakhir dipakai paling lama (timestamp paling lampau) naik ke atas
-      if (usedA !== usedB) {
-        return usedA - usedB;
+      // Keduanya sudah pernah dipakai:
+      // FIFO Queue berdasarkan readyAt:
+      // Akun yang LEBIH DULU siap (readyAt lebih lampau) berada di DEPAN antrean.
+      // Akun yang BARU SAJA reset jam (readyAt paling baru / sekarang) berada di PALING BELAKANG (akhir daftar ready).
+      const readyTimeA = a.readyAt ? new Date(a.readyAt).getTime() : (a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0);
+      const readyTimeB = b.readyAt ? new Date(b.readyAt).getTime() : (b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0);
+
+      if (readyTimeA !== readyTimeB) {
+        return readyTimeA - readyTimeB; // Ascending: timestamp lebih lampau -> di atas/depan
       }
 
-      // Jika sama, akun dengan total pemakaian paling sedikit di atas
-      const countA = a.useCount || 0;
-      const countB = b.useCount || 0;
+      // Jika waktu ready sama persis, urutkan berdasarkan jumlah pemakaian terendah
       if (countA !== countB) {
         return countA - countB;
       }
@@ -798,6 +840,9 @@ function undoHistoryAction(historyId) {
   if (entry.prevState.lastUsedAt !== undefined) {
     acc.lastUsedAt = entry.prevState.lastUsedAt;
   }
+  if (entry.prevState.readyAt !== undefined) {
+    acc.readyAt = entry.prevState.readyAt;
+  }
   acc.notified = false;
 
   // Hapus entri history ini setelah di-undo
@@ -901,10 +946,12 @@ function resetToReady(accountId) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   acc.status = 'ready';
+  acc.readyAt = new Date().toISOString();
   acc.lockedAt = null;
   acc.resetAt = null;
   acc.durationMs = 0;
@@ -964,11 +1011,50 @@ async function loadData() {
     }
   }
 
+  // 3. Sinkronkan status akun yang selesai reset saat web ditutup / dimuat ulang
+  const nowMs = Date.now();
+  let anyStateChanged = false;
+  accounts.forEach(acc => {
+    if (acc.status !== 'ready' && acc.resetAt) {
+      const resetMs = new Date(acc.resetAt).getTime();
+      if (resetMs <= nowMs) {
+        acc.status = 'ready';
+        acc.readyAt = acc.resetAt; // Catat waktu saat timer selesai (antre di urutan yang tepat)
+        acc.lockedAt = null;
+        acc.resetAt = null;
+        acc.durationMs = 0;
+        acc.notified = true;
+        anyStateChanged = true;
+      }
+    }
+    // Normalisasi readyAt jika belum ada pada akun ready yang pernah dipakai
+    if (acc.status === 'ready' && (acc.useCount > 0 || acc.lastUsedAt) && !acc.readyAt) {
+      acc.readyAt = acc.lastUsedAt || new Date(0).toISOString();
+    }
+  });
+
+  if (anyStateChanged) {
+    saveData();
+  }
+
   if (currentUsingAccountId) {
-    const activeAcc = accounts.find(a => a.id === currentUsingAccountId);
-    if (!activeAcc || activeAcc.status !== 'ready') {
+    if (currentUsingAt && Date.now() - currentUsingAt > 30 * 60 * 1000) {
       currentUsingAccountId = null;
-      try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+      currentUsingAt = 0;
+      try {
+        localStorage.removeItem(CURRENT_USING_KEY);
+        localStorage.removeItem(CURRENT_USING_AT_KEY);
+      } catch (e) {}
+    } else {
+      const activeAcc = accounts.find(a => a.id === currentUsingAccountId);
+      if (!activeAcc || activeAcc.status !== 'ready') {
+        currentUsingAccountId = null;
+        currentUsingAt = 0;
+        try {
+          localStorage.removeItem(CURRENT_USING_KEY);
+          localStorage.removeItem(CURRENT_USING_AT_KEY);
+        } catch (e) {}
+      }
     }
   }
 
@@ -1193,7 +1279,11 @@ function clearCurrentUsingAccount(e) {
     e.preventDefault();
   }
   currentUsingAccountId = null;
-  try { localStorage.removeItem(CURRENT_USING_KEY); } catch (err) {}
+  currentUsingAt = 0;
+  try {
+    localStorage.removeItem(CURRENT_USING_KEY);
+    localStorage.removeItem(CURRENT_USING_AT_KEY);
+  } catch (err) {}
   clearSortFreeze();
   renderCards();
   showToast('ℹ️ Status aktif akun dibatalkan, kembali ke urutan rekomendasi semula.', 'info');
@@ -1315,13 +1405,15 @@ function applyParsedTime(accountId, parsed) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   const now = new Date();
   const reset = new Date(now.getTime() + parsed.totalMs);
 
   acc.status = parsed.status;
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = parsed.totalMs;
@@ -1340,7 +1432,11 @@ function applyParsedTime(accountId, parsed) {
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
-    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    currentUsingAt = 0;
+    try {
+      localStorage.removeItem(CURRENT_USING_KEY);
+      localStorage.removeItem(CURRENT_USING_AT_KEY);
+    } catch (e) {}
   }
 
   // Kembalikan ke filter rekomendasi & bersihkan pencarian agar kartu yang baru di-paste
@@ -1422,6 +1518,7 @@ function applyCustomTime(accountId) {
       }
       const reset = new Date(Date.now() + newMs);
       acc.status = newMs > 6 * 3600 * 1000 ? 'weekly_locked' : 'sprint_cooldown';
+      acc.readyAt = null;
       acc.lockedAt = new Date().toISOString();
       acc.resetAt = reset.toISOString();
       acc.durationMs = newMs;
@@ -1455,13 +1552,15 @@ function setSprintLimit(accountId) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   const now = new Date();
   const reset = new Date(now.getTime() + 5 * 3600 * 1000); // Tepat 5 Jam ke depan
 
   acc.status = 'sprint_cooldown';
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = 5 * 3600 * 1000;
@@ -1480,7 +1579,11 @@ function setSprintLimit(accountId) {
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
-    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    currentUsingAt = 0;
+    try {
+      localStorage.removeItem(CURRENT_USING_KEY);
+      localStorage.removeItem(CURRENT_USING_AT_KEY);
+    } catch (e) {}
   }
 
   restoreToRecommended();
@@ -1499,13 +1602,15 @@ function setWeeklyLimit(accountId) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   const now = new Date();
   const reset = new Date(now.getTime() + 7 * 24 * 3600 * 1000); // Tepat 7 Hari ke depan
 
   acc.status = 'weekly_locked';
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = 7 * 24 * 3600 * 1000;
@@ -1524,7 +1629,11 @@ function setWeeklyLimit(accountId) {
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
-    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    currentUsingAt = 0;
+    try {
+      localStorage.removeItem(CURRENT_USING_KEY);
+      localStorage.removeItem(CURRENT_USING_AT_KEY);
+    } catch (e) {}
   }
 
   restoreToRecommended();
@@ -1543,7 +1652,11 @@ function deleteAccount(accountId) {
     const deletedAcc = { ...acc };
     if (currentUsingAccountId === accountId) {
       currentUsingAccountId = null;
-      try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+      currentUsingAt = 0;
+      try {
+        localStorage.removeItem(CURRENT_USING_KEY);
+        localStorage.removeItem(CURRENT_USING_AT_KEY);
+      } catch (e) {}
     }
     accounts = accounts.filter(a => a.id !== accountId);
 
@@ -1589,6 +1702,7 @@ function applyManualAdjustment(accountId) {
 
   if (totalMs <= 0) {
     acc.status = 'ready';
+    acc.readyAt = new Date().toISOString();
     acc.lockedAt = null;
     acc.resetAt = null;
     acc.durationMs = 0;
@@ -1602,6 +1716,7 @@ function applyManualAdjustment(accountId) {
   const now = new Date();
   const reset = new Date(now.getTime() + totalMs);
 
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = totalMs;
@@ -1630,6 +1745,7 @@ function quickSetHours(accountId, targetHours) {
   const reset = new Date(now.getTime() + totalMs);
 
   acc.status = targetHours > 6 ? 'weekly_locked' : 'sprint_cooldown';
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = totalMs;
@@ -1647,7 +1763,11 @@ function quickSetHours(accountId, targetHours) {
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
-    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    currentUsingAt = 0;
+    try {
+      localStorage.removeItem(CURRENT_USING_KEY);
+      localStorage.removeItem(CURRENT_USING_AT_KEY);
+    } catch (e) {}
   }
 
   restoreToRecommended();
@@ -1667,7 +1787,8 @@ function quickSetMinutes(accountId, targetMinutes) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   const now = new Date();
@@ -1675,6 +1796,7 @@ function quickSetMinutes(accountId, targetMinutes) {
   const reset = new Date(now.getTime() + totalMs);
 
   acc.status = 'sprint_cooldown';
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = totalMs;
@@ -1692,7 +1814,11 @@ function quickSetMinutes(accountId, targetMinutes) {
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
-    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    currentUsingAt = 0;
+    try {
+      localStorage.removeItem(CURRENT_USING_KEY);
+      localStorage.removeItem(CURRENT_USING_AT_KEY);
+    } catch (e) {}
   }
 
   restoreToRecommended();
@@ -1711,6 +1837,7 @@ function quickSetDays(accountId, targetDays) {
   const reset = new Date(now.getTime() + totalMs);
 
   acc.status = 'weekly_locked';
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = totalMs;
@@ -1720,7 +1847,11 @@ function quickSetDays(accountId, targetDays) {
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
-    try { localStorage.removeItem(CURRENT_USING_KEY); } catch (e) {}
+    currentUsingAt = 0;
+    try {
+      localStorage.removeItem(CURRENT_USING_KEY);
+      localStorage.removeItem(CURRENT_USING_AT_KEY);
+    } catch (e) {}
   }
 
   restoreToRecommended();
@@ -1739,7 +1870,8 @@ function quickAdjustHours(accountId, deltaHours) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   let currentMs = 0;
@@ -1753,6 +1885,7 @@ function quickAdjustHours(accountId, deltaHours) {
 
   if (newMs <= 0) {
     acc.status = 'ready';
+    acc.readyAt = new Date().toISOString();
     acc.lockedAt = null;
     acc.resetAt = null;
     acc.durationMs = 0;
@@ -1767,6 +1900,7 @@ function quickAdjustHours(accountId, deltaHours) {
   const now = new Date();
   const reset = new Date(now.getTime() + newMs);
 
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = newMs;
@@ -1803,7 +1937,8 @@ function quickAdjustDays(accountId, deltaDays) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   let currentMs = 0;
@@ -1817,6 +1952,7 @@ function quickAdjustDays(accountId, deltaDays) {
 
   if (newMs <= 0) {
     acc.status = 'ready';
+    acc.readyAt = new Date().toISOString();
     acc.lockedAt = null;
     acc.resetAt = null;
     acc.durationMs = 0;
@@ -1831,6 +1967,7 @@ function quickAdjustDays(accountId, deltaDays) {
   const now = new Date();
   const reset = new Date(now.getTime() + newMs);
 
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = newMs;
@@ -1867,7 +2004,8 @@ function quickAdjustMins(accountId, deltaMins) {
     lockedAt: acc.lockedAt,
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
-    lastUsedAt: acc.lastUsedAt
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt
   };
 
   let currentMs = 0;
@@ -1881,6 +2019,7 @@ function quickAdjustMins(accountId, deltaMins) {
 
   if (newMs <= 0) {
     acc.status = 'ready';
+    acc.readyAt = new Date().toISOString();
     acc.lockedAt = null;
     acc.resetAt = null;
     acc.durationMs = 0;
@@ -1895,6 +2034,7 @@ function quickAdjustMins(accountId, deltaMins) {
   const now = new Date();
   const reset = new Date(now.getTime() + newMs);
 
+  acc.readyAt = null;
   acc.lockedAt = now.toISOString();
   acc.resetAt = reset.toISOString();
   acc.durationMs = newMs;
@@ -2273,7 +2413,9 @@ function startLiveTicker() {
 
         // Jika waktu hitung mundur selesai tepat sekarang
         if (rem && rem.expired) {
+          const resetTimeIso = acc.resetAt ? new Date(acc.resetAt).toISOString() : new Date().toISOString();
           acc.status = 'ready';
+          acc.readyAt = resetTimeIso; // Masuk ke antrean paling belakang dari akun yang bisa digunakan!
           acc.lockedAt = null;
           acc.resetAt = null;
           acc.durationMs = 0;
@@ -2307,6 +2449,7 @@ function startLiveTicker() {
     });
 
     if (stateChanged) {
+      clearSortFreeze();
       saveData();
       renderAll();
     }
@@ -2527,8 +2670,10 @@ function openChromeForAccount(accountId) {
 
   // Jadikan akun ini sebagai akun yang sedang aktif digunakan di Chrome
   currentUsingAccountId = acc.id;
+  currentUsingAt = Date.now();
   try {
     localStorage.setItem(CURRENT_USING_KEY, acc.id);
+    localStorage.setItem(CURRENT_USING_AT_KEY, String(currentUsingAt));
   } catch (e) {}
 
   // Pastikan filter aktif adalah 'recommended' dan bersihkan pencarian
