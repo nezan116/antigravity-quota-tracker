@@ -23,8 +23,9 @@ try {
   currentUsingAccountId = localStorage.getItem(CURRENT_USING_KEY) || null;
   const rawAt = localStorage.getItem(CURRENT_USING_AT_KEY);
   currentUsingAt = rawAt ? parseInt(rawAt, 10) : 0;
-  if (currentUsingAt && Date.now() - currentUsingAt > 45 * 60 * 1000) {
+  if (currentUsingAt && Date.now() - currentUsingAt > 30 * 60 * 1000) {
     currentUsingAccountId = null;
+    currentUsingAt = 0;
     localStorage.removeItem(CURRENT_USING_KEY);
     localStorage.removeItem(CURRENT_USING_AT_KEY);
   }
@@ -605,8 +606,8 @@ function sortAccountsByRecommendation(list) {
 
       // Akun yang belum pernah dipakai sama sekali (Fresh):
       // Berada di baris depan, diurutkan nomor akun (Akun 1, Akun 2, ...)
-      const isFreshA = countA === 0 && !a.lastUsedAt;
-      const isFreshB = countB === 0 && !b.lastUsedAt;
+      const isFreshA = countA === 0 && !a.lastUsedAt && !a.readyAt;
+      const isFreshB = countB === 0 && !b.lastUsedAt && !b.readyAt;
 
       if (isFreshA && !isFreshB) return -1;
       if (!isFreshA && isFreshB) return 1;
@@ -730,7 +731,7 @@ function showToast(message, type = 'info') {
 
 
 // --- Toast Alert dengan Tombol Undo ---
-function showToastWithUndo(message, accountId, type = 'warning') {
+function showToastWithUndo(message, accountId, type = 'warning', historyId = null) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
@@ -742,10 +743,12 @@ function showToastWithUndo(message, accountId, type = 'warning') {
   if (type === 'info') icon = 'ℹ️';
   if (type === 'success') icon = '✅';
 
+  const undoAction = historyId ? `undoHistoryAction('${historyId}')` : `resetToReady('${accountId}')`;
+
   toast.innerHTML = `
     <span>${icon}</span>
     <span style="flex: 1; min-width: 0; word-break: break-word;">${message}</span>
-    <button type="button" class="toast-undo-btn" onclick="resetToReady('${accountId}'); this.closest('.toast').remove();" title="Batalkan perubahan ini">
+    <button type="button" class="toast-undo-btn" onclick="${undoAction}; this.closest('.toast').remove();" title="Batalkan perubahan ini">
       ↩️ Batalkan (Undo)
     </button>
   `;
@@ -790,6 +793,7 @@ function addHistoryEntry(entry) {
     actionHistory = actionHistory.slice(0, 50);
   }
   saveHistory();
+  return item.id;
 }
 
 function clearHistoryLog() {
@@ -842,6 +846,9 @@ function undoHistoryAction(historyId) {
   }
   if (entry.prevState.readyAt !== undefined) {
     acc.readyAt = entry.prevState.readyAt;
+  }
+  if (entry.prevState.useCount !== undefined) {
+    acc.useCount = entry.prevState.useCount;
   }
   acc.notified = false;
 
@@ -947,7 +954,8 @@ function resetToReady(accountId) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   acc.status = 'ready';
@@ -970,6 +978,53 @@ function resetToReady(accountId) {
   saveData();
   renderAll();
   showToast(`🟢 Akun "${acc.name || acc.email}" berhasil dikembalikan ke Siap Pakai!`, 'success');
+}
+
+// Sinkronkan status akun yang selesai reset saat web ditutup / dimuat ulang dan normalisasi data
+function syncAndNormalizeAccounts() {
+  const nowMs = Date.now();
+  let anyStateChanged = false;
+  accounts.forEach(acc => {
+    if (acc.status !== 'ready' && acc.resetAt) {
+      const resetMs = new Date(acc.resetAt).getTime();
+      if (resetMs <= nowMs) {
+        acc.status = 'ready';
+        acc.readyAt = acc.resetAt; // Catat waktu saat timer selesai (antre di urutan yang tepat)
+        acc.lockedAt = null;
+        acc.resetAt = null;
+        acc.durationMs = 0;
+        acc.notified = true;
+        anyStateChanged = true;
+      }
+    }
+    // Normalisasi readyAt jika belum ada pada akun ready yang pernah dipakai
+    if (acc.status === 'ready' && (acc.useCount > 0 || acc.lastUsedAt) && !acc.readyAt) {
+      acc.readyAt = acc.lastUsedAt || new Date(0).toISOString();
+    }
+  });
+
+  if (currentUsingAccountId) {
+    if (currentUsingAt && Date.now() - currentUsingAt > 30 * 60 * 1000) {
+      currentUsingAccountId = null;
+      currentUsingAt = 0;
+      try {
+        localStorage.removeItem(CURRENT_USING_KEY);
+        localStorage.removeItem(CURRENT_USING_AT_KEY);
+      } catch (e) {}
+    } else {
+      const activeAcc = accounts.find(a => a.id === currentUsingAccountId);
+      if (!activeAcc || activeAcc.status !== 'ready') {
+        currentUsingAccountId = null;
+        currentUsingAt = 0;
+        try {
+          localStorage.removeItem(CURRENT_USING_KEY);
+          localStorage.removeItem(CURRENT_USING_AT_KEY);
+        } catch (e) {}
+      }
+    }
+  }
+
+  return anyStateChanged;
 }
 
 // --- Storage & Database Management ---
@@ -1012,50 +1067,8 @@ async function loadData() {
   }
 
   // 3. Sinkronkan status akun yang selesai reset saat web ditutup / dimuat ulang
-  const nowMs = Date.now();
-  let anyStateChanged = false;
-  accounts.forEach(acc => {
-    if (acc.status !== 'ready' && acc.resetAt) {
-      const resetMs = new Date(acc.resetAt).getTime();
-      if (resetMs <= nowMs) {
-        acc.status = 'ready';
-        acc.readyAt = acc.resetAt; // Catat waktu saat timer selesai (antre di urutan yang tepat)
-        acc.lockedAt = null;
-        acc.resetAt = null;
-        acc.durationMs = 0;
-        acc.notified = true;
-        anyStateChanged = true;
-      }
-    }
-    // Normalisasi readyAt jika belum ada pada akun ready yang pernah dipakai
-    if (acc.status === 'ready' && (acc.useCount > 0 || acc.lastUsedAt) && !acc.readyAt) {
-      acc.readyAt = acc.lastUsedAt || new Date(0).toISOString();
-    }
-  });
-
-  if (anyStateChanged) {
+  if (syncAndNormalizeAccounts()) {
     saveData();
-  }
-
-  if (currentUsingAccountId) {
-    if (currentUsingAt && Date.now() - currentUsingAt > 30 * 60 * 1000) {
-      currentUsingAccountId = null;
-      currentUsingAt = 0;
-      try {
-        localStorage.removeItem(CURRENT_USING_KEY);
-        localStorage.removeItem(CURRENT_USING_AT_KEY);
-      } catch (e) {}
-    } else {
-      const activeAcc = accounts.find(a => a.id === currentUsingAccountId);
-      if (!activeAcc || activeAcc.status !== 'ready') {
-        currentUsingAccountId = null;
-        currentUsingAt = 0;
-        try {
-          localStorage.removeItem(CURRENT_USING_KEY);
-          localStorage.removeItem(CURRENT_USING_AT_KEY);
-        } catch (e) {}
-      }
-    }
   }
 
   const rawSound = localStorage.getItem(SOUND_KEY);
@@ -1218,9 +1231,12 @@ function handleSaveAccount(e) {
     email,
     name,
     status: 'ready',
+    readyAt: null,
     lockedAt: null,
     resetAt: null,
     durationMs: 0,
+    useCount: 0,
+    lastUsedAt: null,
     notified: false
   };
 
@@ -1406,7 +1422,8 @@ function applyParsedTime(accountId, parsed) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   const now = new Date();
@@ -1421,7 +1438,7 @@ function applyParsedTime(accountId, parsed) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
-  addHistoryEntry({
+  const hId = addHistoryEntry({
     actionType: parsed.status === 'weekly_locked' ? 'weekly_limit' : 'sprint_limit',
     accountId: acc.id,
     accountName: acc.name,
@@ -1444,7 +1461,7 @@ function applyParsedTime(accountId, parsed) {
   restoreToRecommended();
   saveData();
   renderAll();
-  showToastWithUndo(`✅ Berhasil set waktu: ${parsed.description} untuk "${acc.name || acc.email}"`, acc.id, 'success');
+  showToastWithUndo(`✅ Berhasil set waktu: ${parsed.description} untuk "${acc.name || acc.email}"`, acc.id, 'success', hId);
 }
 
 async function pasteFromAntigravity(accountId) {
@@ -1553,7 +1570,8 @@ function setSprintLimit(accountId) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   const now = new Date();
@@ -1568,7 +1586,7 @@ function setSprintLimit(accountId) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
-  addHistoryEntry({
+  const hId = addHistoryEntry({
     actionType: 'sprint_limit',
     accountId: acc.id,
     accountName: acc.name,
@@ -1589,7 +1607,7 @@ function setSprintLimit(accountId) {
   restoreToRecommended();
   saveData();
   renderAll();
-  showToastWithUndo(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
+  showToastWithUndo(`🟡 Limit 5 jam diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning', hId);
 }
 
 // 2. Kena Limit Mingguan
@@ -1603,7 +1621,8 @@ function setWeeklyLimit(accountId) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   const now = new Date();
@@ -1618,7 +1637,7 @@ function setWeeklyLimit(accountId) {
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
 
-  addHistoryEntry({
+  const hId = addHistoryEntry({
     actionType: 'weekly_limit',
     accountId: acc.id,
     accountName: acc.name,
@@ -1639,7 +1658,7 @@ function setWeeklyLimit(accountId) {
   restoreToRecommended();
   saveData();
   renderAll();
-  showToastWithUndo(`🛑 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning');
+  showToastWithUndo(`🛑 Limit mingguan 7 hari diterapkan untuk "${acc.name || acc.email}".`, acc.id, 'warning', hId);
 }
 
 // 3. Hapus Akun (Nomor urut otomatis kosong dan siap dipakai ulang!)
@@ -1740,6 +1759,16 @@ function quickSetHours(accountId, targetHours) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
+  };
+
   const now = new Date();
   const totalMs = targetHours * 3600 * 1000;
   const reset = new Date(now.getTime() + totalMs);
@@ -1758,7 +1787,8 @@ function quickSetHours(accountId, targetHours) {
     accountId: acc.id,
     accountName: acc.name,
     accountEmail: acc.email,
-    desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`
+    desc: `Waktu disetel ${targetHours} Jam (hingga ${formatDateTime(reset.toISOString())})`,
+    prevState
   });
 
   if (currentUsingAccountId === acc.id) {
@@ -1788,7 +1818,8 @@ function quickSetMinutes(accountId, targetMinutes) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   const now = new Date();
@@ -1802,6 +1833,7 @@ function quickSetMinutes(accountId, targetMinutes) {
   acc.durationMs = totalMs;
   acc.notified = false;
   acc.lastUsedAt = now.toISOString();
+  acc.useCount = (acc.useCount || 0) + 1;
 
   addHistoryEntry({
     actionType: 'adjust_time',
@@ -1832,6 +1864,16 @@ function quickSetDays(accountId, targetDays) {
   const acc = accounts.find(a => a.id === accountId);
   if (!acc) return;
 
+  const prevState = {
+    status: acc.status,
+    lockedAt: acc.lockedAt,
+    resetAt: acc.resetAt,
+    durationMs: acc.durationMs,
+    lastUsedAt: acc.lastUsedAt,
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
+  };
+
   const now = new Date();
   const totalMs = targetDays * 24 * 3600 * 1000;
   const reset = new Date(now.getTime() + totalMs);
@@ -1844,6 +1886,15 @@ function quickSetDays(accountId, targetDays) {
   acc.notified = false;
   acc.lastUsedAt = now.toISOString();
   acc.useCount = (acc.useCount || 0) + 1;
+
+  addHistoryEntry({
+    actionType: 'adjust_time',
+    accountId: acc.id,
+    accountName: acc.name,
+    accountEmail: acc.email,
+    desc: `Hitung mundur disetel ke ${targetDays} Hari`,
+    prevState
+  });
 
   if (currentUsingAccountId === acc.id) {
     currentUsingAccountId = null;
@@ -1871,7 +1922,8 @@ function quickAdjustHours(accountId, deltaHours) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   let currentMs = 0;
@@ -1938,7 +1990,8 @@ function quickAdjustDays(accountId, deltaDays) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   let currentMs = 0;
@@ -2005,7 +2058,8 @@ function quickAdjustMins(accountId, deltaMins) {
     resetAt: acc.resetAt,
     durationMs: acc.durationMs,
     lastUsedAt: acc.lastUsedAt,
-    readyAt: acc.readyAt
+    readyAt: acc.readyAt,
+    useCount: acc.useCount || 0
   };
 
   let currentMs = 0;
@@ -2520,6 +2574,7 @@ function setupBackupModal() {
         if (Array.isArray(imported)) {
           if (confirm(`Pulihkan ${imported.length} akun dari file cadangan?`)) {
             accounts = imported;
+            syncAndNormalizeAccounts();
             saveData();
             renderAll();
             updateLabelSuggestion();
